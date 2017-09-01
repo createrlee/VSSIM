@@ -1,16 +1,10 @@
 /* This is the Linux kernel elf-loading code, ported into user space */
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <stdlib.h>
-#include <string.h>
+#include "qemu/osdep.h"
 
 #include "qemu.h"
-#include "disas.h"
+#include "disas/disas.h"
+#include "qemu/path.h"
 
 #ifdef _ARCH_PPC64
 #undef ARCH_DLINFO
@@ -98,7 +92,7 @@ enum {
 static const char *get_elf_platform(void)
 {
     static char elf_platform[] = "i386";
-    int family = (thread_env->cpuid_version >> 8) & 0xff;
+    int family = object_property_get_int(OBJECT(thread_cpu), "family", NULL);
     if (family > 6)
         family = 6;
     if (family >= 3)
@@ -110,7 +104,9 @@ static const char *get_elf_platform(void)
 
 static uint32_t get_elf_hwcap(void)
 {
-  return thread_env->cpuid_features;
+    X86CPU *cpu = X86_CPU(thread_cpu);
+
+    return cpu->env.features[FEAT_1_EDX];
 }
 
 #ifdef TARGET_X86_64
@@ -126,6 +122,9 @@ static inline void init_thread(struct target_pt_regs *regs, struct image_info *i
     regs->rax = 0;
     regs->rsp = infop->start_stack;
     regs->rip = infop->entry;
+    if (bsd_type == target_freebsd) {
+        regs->rdi = infop->start_stack;
+    }
 }
 
 #else
@@ -249,8 +248,13 @@ static inline void init_thread(struct target_pt_regs *regs, struct image_info *i
 #else
     if (personality(infop->personality) == PER_LINUX32)
         regs->u_regs[14] = infop->start_stack - 16 * 4;
-    else
+    else {
         regs->u_regs[14] = infop->start_stack - 16 * 8 - STACK_BIAS;
+        if (bsd_type == target_freebsd) {
+            regs->u_regs[8] = infop->start_stack;
+            regs->u_regs[11] = infop->start_stack;
+        }
+    }
 #endif
 }
 
@@ -341,8 +345,10 @@ static inline void init_thread(struct target_pt_regs *_regs, struct image_info *
 
     _regs->gpr[1] = infop->start_stack;
 #if defined(TARGET_PPC64) && !defined(TARGET_ABI32)
-    entry = ldq_raw(infop->entry) + infop->load_addr;
-    toc = ldq_raw(infop->entry + 8) + infop->load_addr;
+    get_user_u64(entry, infop->entry);
+    entry += infop->load_addr;
+    get_user_u64(toc, infop->entry + 8);
+    toc += infop->load_addr;
     _regs->gpr[2] = toc;
     infop->entry = entry;
 #endif
@@ -355,8 +361,9 @@ static inline void init_thread(struct target_pt_regs *_regs, struct image_info *
     get_user_ual(_regs->gpr[3], pos);
     pos += sizeof(abi_ulong);
     _regs->gpr[4] = pos;
-    for (tmp = 1; tmp != 0; pos += sizeof(abi_ulong))
-        tmp = ldl(pos);
+    for (tmp = 1; tmp != 0; pos += sizeof(abi_ulong)) {
+        get_user_ual(tmp, pos);
+    }
     _regs->gpr[5] = pos;
 }
 
@@ -633,8 +640,7 @@ static abi_ulong copy_elf_strings(int argc,char ** argv, void **page,
                 offset = p % TARGET_PAGE_SIZE;
                 pag = (char *)page[p/TARGET_PAGE_SIZE];
                 if (!pag) {
-                    pag = (char *)malloc(TARGET_PAGE_SIZE);
-                    memset(pag, 0, TARGET_PAGE_SIZE);
+                    pag = g_try_malloc0(TARGET_PAGE_SIZE);
                     page[p/TARGET_PAGE_SIZE] = pag;
                     if (!pag)
                         return 0;
@@ -688,7 +694,7 @@ static abi_ulong setup_arg_pages(abi_ulong p, struct linux_binprm *bprm,
             info->rss++;
             /* FIXME - check return value of memcpy_to_target() for failure */
             memcpy_to_target(stack_base, bprm->page[i], TARGET_PAGE_SIZE);
-            free(bprm->page[i]);
+            g_free(bprm->page[i]);
         }
         stack_base += TARGET_PAGE_SIZE;
     }
@@ -728,8 +734,7 @@ static void padzero(abi_ulong elf_bss, abi_ulong last_bss)
            size must be known */
         if (qemu_real_host_page_size < qemu_host_page_size) {
             abi_ulong end_addr, end_addr1;
-            end_addr1 = (elf_bss + qemu_real_host_page_size - 1) &
-                ~(qemu_real_host_page_size - 1);
+            end_addr1 = REAL_HOST_PAGE_ALIGN(elf_bss);
             end_addr = HOST_PAGE_ALIGN(elf_bss);
             if (end_addr1 < end_addr) {
                 mmap((void *)g2h(end_addr1), end_addr - end_addr1,
@@ -986,12 +991,12 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
 
 static int symfind(const void *s0, const void *s1)
 {
-    struct elf_sym *key = (struct elf_sym *)s0;
+    target_ulong addr = *(target_ulong *)s0;
     struct elf_sym *sym = (struct elf_sym *)s1;
     int result = 0;
-    if (key->st_value < sym->st_value) {
+    if (addr < sym->st_value) {
         result = -1;
-    } else if (key->st_value > sym->st_value + sym->st_size) {
+    } else if (addr >= sym->st_value + sym->st_size) {
         result = 1;
     }
     return result;
@@ -1006,12 +1011,9 @@ static const char *lookup_symbolxx(struct syminfo *s, target_ulong orig_addr)
 #endif
 
     // binary search
-    struct elf_sym key;
     struct elf_sym *sym;
 
-    key.st_value = orig_addr;
-
-    sym = bsearch(&key, syms, s->disas_num_syms, sizeof(*syms), symfind);
+    sym = bsearch(&orig_addr, syms, s->disas_num_syms, sizeof(*syms), symfind);
     if (sym != NULL) {
         return s->disas_strtab + sym->st_name;
     }
@@ -1036,7 +1038,7 @@ static void load_symbols(struct elfhdr *hdr, int fd)
     struct elf_shdr sechdr, symtab, strtab;
     char *strings;
     struct syminfo *s;
-    struct elf_sym *syms;
+    struct elf_sym *syms, *new_syms;
 
     lseek(fd, hdr->e_shoff, SEEK_SET);
     for (i = 0; i < hdr->e_shnum; i++) {
@@ -1064,15 +1066,24 @@ static void load_symbols(struct elfhdr *hdr, int fd)
     /* Now know where the strtab and symtab are.  Snarf them. */
     s = malloc(sizeof(*s));
     syms = malloc(symtab.sh_size);
-    if (!syms)
+    if (!syms) {
+        free(s);
         return;
+    }
     s->disas_strtab = strings = malloc(strtab.sh_size);
-    if (!s->disas_strtab)
+    if (!s->disas_strtab) {
+        free(s);
+        free(syms);
         return;
+    }
 
     lseek(fd, symtab.sh_offset, SEEK_SET);
-    if (read(fd, syms, symtab.sh_size) != symtab.sh_size)
+    if (read(fd, syms, symtab.sh_size) != symtab.sh_size) {
+        free(s);
+        free(syms);
+        free(strings);
         return;
+    }
 
     nsyms = symtab.sh_size / sizeof(struct elf_sym);
 
@@ -1097,20 +1108,36 @@ static void load_symbols(struct elfhdr *hdr, int fd)
 #endif
         i++;
     }
-    syms = realloc(syms, nsyms * sizeof(*syms));
+
+     /* Attempt to free the storage associated with the local symbols
+        that we threw away.  Whether or not this has any effect on the
+        memory allocation depends on the malloc implementation and how
+        many symbols we managed to discard. */
+    new_syms = realloc(syms, nsyms * sizeof(*syms));
+    if (new_syms == NULL) {
+        free(s);
+        free(syms);
+        free(strings);
+        return;
+    }
+    syms = new_syms;
 
     qsort(syms, nsyms, sizeof(*syms), symcmp);
 
     lseek(fd, strtab.sh_offset, SEEK_SET);
-    if (read(fd, strings, strtab.sh_size) != strtab.sh_size)
+    if (read(fd, strings, strtab.sh_size) != strtab.sh_size) {
+        free(s);
+        free(syms);
+        free(strings);
         return;
+    }
     s->disas_num_syms = nsyms;
 #if ELF_CLASS == ELFCLASS32
     s->disas_symtab.elf32 = syms;
-    s->lookup_symbol = lookup_symbolxx;
+    s->lookup_symbol = (lookup_symbol_t)lookup_symbolxx;
 #else
     s->disas_symtab.elf64 = syms;
-    s->lookup_symbol = lookup_symbolxx;
+    s->lookup_symbol = (lookup_symbol_t)lookup_symbolxx;
 #endif
     s->next = syminfos;
     syminfos = s;
@@ -1128,21 +1155,20 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
     unsigned int interpreter_type = INTERPRETER_NONE;
     unsigned char ibcs2_interpreter;
     int i;
-    abi_ulong mapped_addr;
     struct elf_phdr * elf_ppnt;
     struct elf_phdr *elf_phdata;
     abi_ulong elf_bss, k, elf_brk;
     int retval;
     char * elf_interpreter;
     abi_ulong elf_entry, interp_load_addr = 0;
-    int status;
     abi_ulong start_code, end_code, start_data, end_data;
     abi_ulong reloc_func_desc = 0;
-    abi_ulong elf_stack;
+#ifdef LOW_ELF_STACK
+    abi_ulong elf_stack = ~((abi_ulong)0UL);
+#endif
     char passed_fileno[6];
 
     ibcs2_interpreter = 0;
-    status = 0;
     load_addr = 0;
     load_bias = 0;
     elf_ex = *((struct elfhdr *) bprm->buf);          /* exec-header */
@@ -1194,7 +1220,6 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
     elf_brk = 0;
 
 
-    elf_stack = ~((abi_ulong)0UL);
     elf_interpreter = NULL;
     start_code = ~((abi_ulong)0UL);
     end_code = 0;
@@ -1246,7 +1271,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
             }
 
 #if 0
-            printf("Using ELF interpreter %s\n", elf_interpreter);
+            printf("Using ELF interpreter %s\n", path(elf_interpreter));
 #endif
             if (retval >= 0) {
                 retval = open(path(elf_interpreter), O_RDONLY);
@@ -1268,7 +1293,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
             }
             if (retval >= 0) {
                 interp_ex = *((struct exec *) bprm->buf); /* aout exec-header */
-                interp_elf_ex=*((struct elfhdr *) bprm->buf); /* elf exec-header */
+                interp_elf_ex = *((struct elfhdr *) bprm->buf); /* elf exec-header */
             }
             if (retval < 0) {
                 perror("load_elf_binary3");
@@ -1321,9 +1346,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
             }
         }
         if (!bprm->p) {
-            if (elf_interpreter) {
-                free(elf_interpreter);
-            }
+            free(elf_interpreter);
             free (elf_phdata);
             close(bprm->fd);
             return -E2BIG;
@@ -1336,6 +1359,27 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
     info->start_mmap = (abi_ulong)ELF_START_MMAP;
     info->mmap = 0;
     elf_entry = (abi_ulong) elf_ex.e_entry;
+
+    /*
+     * In case where user has not explicitly set the guest_base, we
+     * probe here that should we set it automatically.
+     */
+    if (!have_guest_base) {
+        /*
+         * Go through ELF program header table and find out whether
+	 * any of the segments drop below our current mmap_min_addr and
+         * in that case set guest_base to corresponding address.
+         */
+        for (i = 0, elf_ppnt = elf_phdata; i < elf_ex.e_phnum;
+            i++, elf_ppnt++) {
+            if (elf_ppnt->p_type != PT_LOAD)
+                continue;
+            if (HOST_PAGE_ALIGN(elf_ppnt->p_vaddr) < mmap_min_addr) {
+                guest_base = HOST_PAGE_ALIGN(mmap_min_addr);
+                break;
+            }
+        }
+    }
 
     /* Do this so that we can load the interpreter, if need be.  We will
        change some of these later */
@@ -1500,7 +1544,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
                and some applications "depend" upon this behavior.
                Since we do not have the power to recompile these, we
                emulate the SVr4 behavior.  Sigh.  */
-            mapped_addr = target_mmap(0, qemu_host_page_size, PROT_READ | PROT_EXEC,
+            target_mmap(0, qemu_host_page_size, PROT_READ | PROT_EXEC,
                                       MAP_FIXED | MAP_PRIVATE, -1, 0);
     }
 

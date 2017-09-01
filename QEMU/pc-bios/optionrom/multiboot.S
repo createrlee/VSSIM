@@ -18,63 +18,17 @@
  *   Authors: Alexander Graf <agraf@suse.de>
  */
 
-#define NO_QEMU_PROTOS
-#include "../../hw/fw_cfg.h"
+#include "optionrom.h"
 
-#define BIOS_CFG_IOPORT_CFG	0x510
-#define BIOS_CFG_IOPORT_DATA	0x511
+#define BOOT_ROM_PRODUCT "multiboot loader"
 
 #define MULTIBOOT_MAGIC		0x2badb002
 
-/* Read a variable from the fw_cfg device.
-   Clobbers:	%edx
-   Out:		%eax */
-.macro read_fw VAR
-	mov		$\VAR, %ax
-	mov		$BIOS_CFG_IOPORT_CFG, %dx
-	outw		%ax, (%dx)
-	mov		$BIOS_CFG_IOPORT_DATA, %dx
-	inb		(%dx), %al
-	shl		$8, %eax
-	inb		(%dx), %al
-	shl		$8, %eax
-	inb		(%dx), %al
-	shl		$8, %eax
-	inb		(%dx), %al
-	bswap		%eax
-.endm
+#define GS_PROT_JUMP		0
+#define GS_GDT_DESC		6
 
-.code16
-.text
-	.global 	_start
-_start:
-	.short		0xaa55
-	.byte		1 /* (_end - _start) / 512 */
-	push		%eax
-	push		%ds
 
-	/* setup ds so we can access the IVT */
-	xor		%ax, %ax
-	mov		%ax, %ds
-
-	/* save old int 19 */
-	mov		(0x19*4), %eax
-	mov		%eax, %cs:old_int19
-
-	/* install our int 19 handler */
-	movw		$int19_handler, (0x19*4)
-	mov		%cs, (0x19*4+2)
-
-	pop		%ds
-	pop		%eax
-	lret
-
-int19_handler:
-	/* DS = CS */
-	movw		%cs, %ax
-	movw		%ax, %ds
-
-	/* fall through */
+BOOT_ROM_START
 
 run_multiboot:
 
@@ -84,36 +38,65 @@ run_multiboot:
 	mov		%cs, %eax
 	shl		$0x4, %eax
 
-	/* fix the gdt descriptor to be PC relative */
-	mov		(gdt_desc+2), %ebx
-	add		%eax, %ebx
-	mov		%ebx, (gdt_desc+2)
+	/* set up a long jump descriptor that is PC relative */
 
-	/* fix the prot mode indirect jump to be PC relative */
+	/* move stack memory to %gs */
+	mov		%ss, %ecx
+	shl		$0x4, %ecx
+	mov		%esp, %ebx
+	add		%ebx, %ecx
+	sub		$0x20, %ecx
+	sub		$0x30, %esp
+	shr		$0x4, %ecx
+	mov		%cx, %gs
+
+	/* now push the indirect jump descriptor there */
 	mov		(prot_jump), %ebx
 	add		%eax, %ebx
-	mov		%ebx, (prot_jump)
+	movl		%ebx, %gs:GS_PROT_JUMP
+	mov		$8, %bx
+	movw		%bx, %gs:GS_PROT_JUMP + 4
+
+	/* fix the gdt descriptor to be PC relative */
+	movw		(gdt_desc), %bx
+	movw		%bx, %gs:GS_GDT_DESC
+	movl		(gdt_desc+2), %ebx
+	add		%eax, %ebx
+	movl		%ebx, %gs:GS_GDT_DESC + 2
+
+	xor		%eax, %eax
+	mov		%eax, %es
+
+	/* Read the bootinfo struct into RAM */
+	read_fw_blob(FW_CFG_INITRD)
 
 	/* FS = bootinfo_struct */
 	read_fw		FW_CFG_INITRD_ADDR
 	shr		$4, %eax
 	mov		%ax, %fs
 
+	/* Account for the EBDA in the multiboot structure's e801
+	 * map.
+	 */
+	int		$0x12
+	cwtl
+	movl		%eax, %fs:4
+
 	/* ES = mmap_addr */
-	read_fw		FW_CFG_INITRD_SIZE
+	mov 		%fs:48, %eax
 	shr		$4, %eax
 	mov		%ax, %es
 
 	/* Initialize multiboot mmap structs using int 0x15(e820) */
 	xor		%ebx, %ebx
-	/* mmap start after first size */
-	movl		$4, %edi
+	/* Start storing mmap data at %es:0 */
+	xor		%edi, %edi
 
 mmap_loop:
+	/* The multiboot entry size has offset -4, so leave some space */
+	add		$4, %di
 	/* entry size (mmap struct) & max buffer size (int15) */
 	movl		$20, %ecx
-	/* store entry size */
-	movl		%ecx, %es:-4(%edi)
 	/* e820 */
 	movl		$0x0000e820, %eax
 	/* 'SMAP' magic */
@@ -121,27 +104,69 @@ mmap_loop:
 	int		$0x15
 
 mmap_check_entry:
-	/* last entry? then we're done */
+	/* Error or last entry already done? */
 	jb		mmap_done
-	and		%bx, %bx
-	jz		mmap_done
-	/* valid entry, so let's loop on */
 
 mmap_store_entry:
-	/* %ax = entry_number * 24 */
-	mov		$24, %ax
-	mul		%bx
-	mov		%ax, %di
+	/* store entry size */
+	/* old as(1) doesn't like this insn so emit the bytes instead:
+	movl		%ecx, %es:-4(%edi)
+	*/
+	.dc.b		0x26,0x67,0x66,0x89,0x4f,0xfc
+
+	/* %edi += entry_size, store as mbs_mmap_length */
+	add		%ecx, %edi
 	movw		%di, %fs:0x2c
-	/* %di = 4 + (entry_number * 24) */
-	add		$4, %di
-	jmp		mmap_loop
+
+	/* Continuation value 0 means last entry */
+	test		%ebx, %ebx
+	jnz		mmap_loop
 
 mmap_done:
+	/* Calculate upper_mem field: The amount of memory between 1 MB and
+	   the first upper memory hole. Get it from the mmap. */
+	xor		%di, %di
+	mov		$0x100000, %edx
+upper_mem_entry:
+	cmp		%fs:0x2c, %di
+	je		upper_mem_done
+	add		$4, %di
+
+	/* Skip if type != 1 */
+	cmpl		$1, %es:16(%di)
+	jne		upper_mem_next
+
+	/* Skip if > 4 GB */
+	movl		%es:4(%di), %eax
+	test		%eax, %eax
+	jnz		upper_mem_next
+
+	/* Check for contiguous extension (base <= %edx < base + length) */
+	movl		%es:(%di), %eax
+	cmp		%eax, %edx
+	jb		upper_mem_next
+	addl		%es:8(%di), %eax
+	cmp		%eax, %edx
+	jae		upper_mem_next
+
+	/* If so, update %edx, and restart the search (mmap isn't ordered) */
+	mov		%eax, %edx
+	xor		%di, %di
+	jmp		upper_mem_entry
+
+upper_mem_next:
+	addl		%es:-4(%di), %edi
+	jmp		upper_mem_entry
+
+upper_mem_done:
+	sub		$0x100000, %edx
+	shr		$10, %edx
+	mov		%edx, %fs:0x8
+
 real_to_prot:
 	/* Load the GDT before going into protected mode */
 lgdt:
-	data32 lgdt	%cs:gdt_desc
+	data32 lgdt	%gs:GS_GDT_DESC
 
 	/* get us to protected mode now */
 	movl		$1, %eax
@@ -149,7 +174,7 @@ lgdt:
 
 	/* the LJMP sets CS for us and gets us to 32-bit */
 ljmp:
-	data32 ljmp	*%cs:prot_jump
+	data32 ljmp	*%gs:GS_PROT_JUMP
 
 prot_mode:
 .code32
@@ -162,8 +187,11 @@ prot_mode:
 	movl		%eax, %fs
 	movl		%eax, %gs
 
+	/* Read the kernel and modules into RAM */
+	read_fw_blob(FW_CFG_KERNEL)
+
 	/* Jump off to the kernel */
-	read_fw		FW_CFG_KERNEL_ADDR
+	read_fw		FW_CFG_KERNEL_ENTRY
 	mov		%eax, %ecx
 
 	/* EBX contains a pointer to the bootinfo struct */
@@ -177,8 +205,6 @@ ljmp2:
 
 /* Variables */
 .align 4, 0
-old_int19:	.long 0
-
 prot_jump:	.long prot_mode
 		.short 8
 
@@ -203,6 +229,4 @@ gdt_desc:
 .short	(5 * 8) - 1
 .long	gdt
 
-.align 512, 0
-_end:
-
+BOOT_ROM_END

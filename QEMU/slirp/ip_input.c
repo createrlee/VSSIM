@@ -38,8 +38,8 @@
  * terms and conditions of the copyright.
  */
 
-#include <slirp.h>
-#include <osdep.h>
+#include "qemu/osdep.h"
+#include "slirp.h"
 #include "ip_icmp.h"
 
 static struct ip *ip_reass(Slirp *slirp, struct ip *ip, struct ipq *fp);
@@ -58,6 +58,14 @@ ip_init(Slirp *slirp)
     slirp->ipq.ip_link.next = slirp->ipq.ip_link.prev = &slirp->ipq.ip_link;
     udp_init(slirp);
     tcp_init(slirp);
+    icmp_init(slirp);
+}
+
+void ip_cleanup(Slirp *slirp)
+{
+    udp_cleanup(slirp);
+    tcp_cleanup(slirp);
+    icmp_cleanup(slirp);
 }
 
 /*
@@ -71,12 +79,16 @@ ip_input(struct mbuf *m)
 	register struct ip *ip;
 	int hlen;
 
+	if (!slirp->in_enabled) {
+		goto bad;
+	}
+
 	DEBUG_CALL("ip_input");
-	DEBUG_ARG("m = %lx", (long)m);
+	DEBUG_ARG("m = %p", m);
 	DEBUG_ARG("m_len = %d", m->m_len);
 
 	if (m->m_len < sizeof (struct ip)) {
-		return;
+		goto bad;
 	}
 
 	ip = mtod(m, struct ip *);
@@ -118,35 +130,14 @@ ip_input(struct mbuf *m)
 		goto bad;
 	}
 
-    if (slirp->restricted) {
-        if ((ip->ip_dst.s_addr & slirp->vnetwork_mask.s_addr) ==
-            slirp->vnetwork_addr.s_addr) {
-            if (ip->ip_dst.s_addr == 0xffffffff && ip->ip_p != IPPROTO_UDP)
-                goto bad;
-        } else {
-            uint32_t inv_mask = ~slirp->vnetwork_mask.s_addr;
-            struct ex_list *ex_ptr;
-
-            if ((ip->ip_dst.s_addr & inv_mask) == inv_mask) {
-                goto bad;
-            }
-            for (ex_ptr = slirp->exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next)
-                if (ex_ptr->ex_addr.s_addr == ip->ip_dst.s_addr)
-                    break;
-
-            if (!ex_ptr)
-                goto bad;
-        }
-    }
-
 	/* Should drop packet if mbuf too long? hmmm... */
 	if (m->m_len > ip->ip_len)
 	   m_adj(m, ip->ip_len - m->m_len);
 
 	/* check ip_ttl for a correct ICMP reply */
-	if(ip->ip_ttl==0 || ip->ip_ttl==1) {
-	  icmp_error(m, ICMP_TIMXCEED,ICMP_TIMXCEED_INTRANS, 0,"ttl");
-	  goto bad;
+	if (ip->ip_ttl == 0) {
+	    icmp_send_error(m, ICMP_TIMXCEED, ICMP_TIMXCEED_INTRANS, 0, "ttl");
+	    goto bad;
 	}
 
 	/*
@@ -212,7 +203,7 @@ ip_input(struct mbuf *m)
 	 */
 	switch (ip->ip_p) {
 	 case IPPROTO_TCP:
-		tcp_input(m, hlen, (struct socket *)NULL);
+		tcp_input(m, hlen, (struct socket *)NULL, AF_INET);
 		break;
 	 case IPPROTO_UDP:
 		udp_input(m, hlen);
@@ -225,8 +216,7 @@ ip_input(struct mbuf *m)
 	}
 	return;
 bad:
-	m_freem(m);
-	return;
+	m_free(m);
 }
 
 #define iptofrag(P) ((struct ipasfrag *)(((char*)(P)) - sizeof(struct qlink)))
@@ -246,9 +236,9 @@ ip_reass(Slirp *slirp, struct ip *ip, struct ipq *fp)
 	int i, next;
 
 	DEBUG_CALL("ip_reass");
-	DEBUG_ARG("ip = %lx", (long)ip);
-	DEBUG_ARG("fp = %lx", (long)fp);
-	DEBUG_ARG("m = %lx", (long)m);
+	DEBUG_ARG("ip = %p", ip);
+	DEBUG_ARG("fp = %p", fp);
+	DEBUG_ARG("m = %p", m);
 
 	/*
 	 * Presence of header sizes in mbufs
@@ -318,7 +308,7 @@ ip_reass(Slirp *slirp, struct ip *ip, struct ipq *fp)
 			break;
 		}
 		q = q->ipf_next;
-		m_freem(dtom(slirp, q->ipf_prev));
+		m_free(dtom(slirp, q->ipf_prev));
 		ip_deq(q->ipf_prev);
 	}
 
@@ -384,7 +374,7 @@ insert:
 	return ip;
 
 dropfrag:
-	m_freem(m);
+	m_free(m);
         return NULL;
 }
 
@@ -400,7 +390,7 @@ ip_freef(Slirp *slirp, struct ipq *fp)
 	for (q = fp->frag_link.next; q != (struct ipasfrag*)&fp->frag_link; q = p) {
 		p = q->ipf_next;
 		ip_deq(q);
-		m_freem(dtom(slirp, q));
+		m_free(dtom(slirp, q));
 	}
 	remque(&fp->ip_link);
 	(void) m_free(dtom(slirp, fp));
@@ -414,7 +404,7 @@ static void
 ip_enq(register struct ipasfrag *p, register struct ipasfrag *prev)
 {
 	DEBUG_CALL("ip_enq");
-	DEBUG_ARG("prev = %lx", (long)prev);
+	DEBUG_ARG("prev = %p", prev);
 	p->ipf_prev =  prev;
 	p->ipf_next = prev->ipf_next;
 	((struct ipasfrag *)(prev->ipf_next))->ipf_prev = p;
@@ -477,7 +467,7 @@ ip_dooptions(m)
 	register struct in_ifaddr *ia;
 	int opt, optlen, cnt, off, code, type, forward = 0;
 	struct in_addr *sin, dst;
-typedef u_int32_t n_time;
+typedef uint32_t n_time;
 	n_time ntime;
 
 	dst = ip->ip_dst;
@@ -531,7 +521,7 @@ typedef u_int32_t n_time;
 				 */
 				break;
 			}
-			off--;			/ * 0 origin *  /
+                        off--; /* 0 origin */
 			if (off > optlen - sizeof(struct in_addr)) {
 				/*
 				 * End of source route.  Should be for us.
@@ -574,7 +564,7 @@ typedef u_int32_t n_time;
 			/*
 			 * If no space remains, ignore.
 			 */
-			off--;			 * 0 origin *
+                        off--; /* 0 origin */
 			if (off > optlen - sizeof(struct in_addr))
 				break;
 			bcopy((caddr_t)(&ip->ip_dst), (caddr_t)&ipaddr.sin_addr,
@@ -648,11 +638,9 @@ typedef u_int32_t n_time;
 		ip_forward(m, 1);
 		return (1);
 	}
-		}
-	}
 	return (0);
 bad:
- 	icmp_error(m, type, code, 0, 0);
+	icmp_send_error(m, type, code, 0, 0);
 
 	return (1);
 }

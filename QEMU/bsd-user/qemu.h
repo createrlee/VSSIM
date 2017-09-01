@@ -1,30 +1,46 @@
+/*
+ *  qemu bsd user mode definition
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef QEMU_H
 #define QEMU_H
 
-#include <signal.h>
-#include <string.h>
 
 #include "cpu.h"
+#include "exec/exec-all.h"
+#include "exec/cpu_ldst.h"
 
 #undef DEBUG_REMAP
 #ifdef DEBUG_REMAP
-#include <stdlib.h>
 #endif /* DEBUG_REMAP */
 
-#include "qemu-types.h"
+#include "exec/user/abitypes.h"
 
 enum BSDType {
     target_freebsd,
     target_netbsd,
     target_openbsd,
 };
+extern enum BSDType bsd_type;
 
 #include "syscall_defs.h"
-#include "syscall.h"
+#include "target_syscall.h"
 #include "target_signal.h"
-#include "gdbstub.h"
+#include "exec/gdbstub.h"
 
-#if defined(USE_NPTL)
+#if defined(CONFIG_USE_NPTL)
 #define THREAD __thread
 #else
 #define THREAD
@@ -49,7 +65,6 @@ struct image_info {
     abi_ulong entry;
     abi_ulong code_offset;
     abi_ulong data_offset;
-    char      **host_argv;
     int       personality;
 };
 
@@ -70,6 +85,8 @@ struct emulated_sigtable {
 /* NOTE: we force a big alignment so that the stack stored after is
    aligned too */
 typedef struct TaskState {
+    pid_t ts_tid;     /* tid (or pid) of this task */
+
     struct TaskState *next;
     int used; /* non zero if used */
     struct image_info *info;
@@ -84,6 +101,7 @@ typedef struct TaskState {
 
 void init_task_state(TaskState *ts);
 extern const char *qemu_uname_release;
+extern unsigned long mmap_min_addr;
 
 /* ??? See if we can avoid exposing so much of the loader internals.  */
 /*
@@ -127,26 +145,35 @@ abi_long do_brk(abi_ulong new_brk);
 void syscall_init(void);
 abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
                             abi_long arg2, abi_long arg3, abi_long arg4,
-                            abi_long arg5, abi_long arg6);
+                            abi_long arg5, abi_long arg6, abi_long arg7,
+                            abi_long arg8);
 abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
                            abi_long arg2, abi_long arg3, abi_long arg4,
                            abi_long arg5, abi_long arg6);
 abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
                             abi_long arg2, abi_long arg3, abi_long arg4,
                             abi_long arg5, abi_long arg6);
-void gemu_log(const char *fmt, ...) __attribute__((format(printf,1,2)));
-extern THREAD CPUState *thread_env;
-void cpu_loop(CPUState *env, enum BSDType bsd_type);
-void init_paths(const char *prefix);
-const char *path(const char *pathname);
+void gemu_log(const char *fmt, ...) GCC_FMT_ATTR(1, 2);
+extern THREAD CPUState *thread_cpu;
+void cpu_loop(CPUArchState *env);
 char *target_strerror(int err);
 int get_osversion(void);
 void fork_start(void);
 void fork_end(int child);
 
-#include "qemu-log.h"
+#include "qemu/log.h"
 
 /* strace.c */
+struct syscallname {
+    int nr;
+    const char *name;
+    const char *format;
+    void (*call)(const struct syscallname *,
+                 abi_long, abi_long, abi_long,
+                 abi_long, abi_long, abi_long);
+    void (*result)(const struct syscallname *, abi_long);
+};
+
 void
 print_freebsd_syscall(int num,
                       abi_long arg1, abi_long arg2, abi_long arg3,
@@ -165,13 +192,13 @@ void print_openbsd_syscall_ret(int num, abi_long ret);
 extern int do_strace;
 
 /* signal.c */
-void process_pending_signals(CPUState *cpu_env);
+void process_pending_signals(CPUArchState *cpu_env);
 void signal_init(void);
-//int queue_signal(CPUState *env, int sig, target_siginfo_t *info);
+//int queue_signal(CPUArchState *env, int sig, target_siginfo_t *info);
 //void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info);
 //void target_to_host_siginfo(siginfo_t *info, const target_siginfo_t *tinfo);
-long do_sigreturn(CPUState *env);
-long do_rt_sigreturn(CPUState *env);
+long do_sigreturn(CPUArchState *env);
+long do_rt_sigreturn(CPUArchState *env);
 abi_long do_sigaltstack(abi_ulong uss_addr, abi_ulong uoss_addr, abi_ulong sp);
 
 /* mmap.c */
@@ -184,14 +211,8 @@ abi_long target_mremap(abi_ulong old_addr, abi_ulong old_size,
                        abi_ulong new_addr);
 int target_msync(abi_ulong start, abi_ulong len, int flags);
 extern unsigned long last_brk;
-void mmap_lock(void);
-void mmap_unlock(void);
-void cpu_list_lock(void);
-void cpu_list_unlock(void);
-#if defined(USE_NPTL)
 void mmap_fork_start(void);
 void mmap_fork_end(int child);
-#endif
 
 /* main.c */
 extern unsigned long x86_stack_size;
@@ -321,9 +342,9 @@ abi_long copy_from_user(void *hptr, abi_ulong gaddr, size_t len);
 abi_long copy_to_user(abi_ulong gaddr, void *hptr, size_t len);
 
 /* Functions for accessing guest memory.  The tget and tput functions
-   read/write single values, byteswapping as neccessary.  The lock_user
+   read/write single values, byteswapping as necessary.  The lock_user function
    gets a pointer to a contiguous area of guest memory, but does not perform
-   and byteswapping.  lock_user may return either a pointer to the guest
+   any byteswapping.  lock_user may return either a pointer to the guest
    memory, or a temporary buffer.  */
 
 /* Lock an area of guest memory into the host.  If copy is true then the
@@ -335,7 +356,7 @@ static inline void *lock_user(int type, abi_ulong guest_addr, long len, int copy
 #ifdef DEBUG_REMAP
     {
         void *addr;
-        addr = malloc(len);
+        addr = g_malloc(len);
         if (copy)
             memcpy(addr, g2h(guest_addr), len);
         else
@@ -361,7 +382,7 @@ static inline void unlock_user(void *host_ptr, abi_ulong guest_addr,
         return;
     if (len > 0)
         memcpy(g2h(guest_addr), host_ptr, len);
-    free(host_ptr);
+    g_free(host_ptr);
 #endif
 }
 
@@ -379,13 +400,13 @@ static inline void *lock_user_string(abi_ulong guest_addr)
     return lock_user(VERIFY_READ, guest_addr, (long)(len + 1), 1);
 }
 
-/* Helper macros for locking/ulocking a target struct.  */
+/* Helper macros for locking/unlocking a target struct.  */
 #define lock_user_struct(type, host_ptr, guest_addr, copy)      \
     (host_ptr = lock_user(type, guest_addr, sizeof(*host_ptr), copy))
 #define unlock_user_struct(host_ptr, guest_addr, copy)          \
     unlock_user(host_ptr, guest_addr, (copy) ? sizeof(*host_ptr) : 0)
 
-#if defined(USE_NPTL)
+#if defined(CONFIG_USE_NPTL)
 #include <pthread.h>
 #endif
 

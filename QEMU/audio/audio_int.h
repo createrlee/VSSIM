@@ -21,6 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #ifndef QEMU_AUDIO_INT_H
 #define QEMU_AUDIO_INT_H
 
@@ -50,7 +51,7 @@ struct audio_option {
 
 struct audio_callback {
     void *opaque;
-    audio_callback_fn_t fn;
+    audio_callback_fn fn;
 };
 
 struct audio_pcm_info {
@@ -68,6 +69,7 @@ typedef struct SWVoiceCap SWVoiceCap;
 
 typedef struct HWVoiceOut {
     int enabled;
+    int poll_mode;
     int pending_disable;
     struct audio_pcm_info info;
 
@@ -79,14 +81,16 @@ typedef struct HWVoiceOut {
     struct st_sample *mix_buf;
 
     int samples;
-    LIST_HEAD (sw_out_listhead, SWVoiceOut) sw_head;
-    LIST_HEAD (sw_cap_listhead, SWVoiceCap) cap_head;
+    QLIST_HEAD (sw_out_listhead, SWVoiceOut) sw_head;
+    QLIST_HEAD (sw_cap_listhead, SWVoiceCap) cap_head;
+    int ctl_caps;
     struct audio_pcm_ops *pcm_ops;
-    LIST_ENTRY (HWVoiceOut) entries;
+    QLIST_ENTRY (HWVoiceOut) entries;
 } HWVoiceOut;
 
 typedef struct HWVoiceIn {
     int enabled;
+    int poll_mode;
     struct audio_pcm_info info;
 
     t_sample *conv;
@@ -98,9 +102,10 @@ typedef struct HWVoiceIn {
     struct st_sample *conv_buf;
 
     int samples;
-    LIST_HEAD (sw_in_listhead, SWVoiceIn) sw_head;
+    QLIST_HEAD (sw_in_listhead, SWVoiceIn) sw_head;
+    int ctl_caps;
     struct audio_pcm_ops *pcm_ops;
-    LIST_ENTRY (HWVoiceIn) entries;
+    QLIST_ENTRY (HWVoiceIn) entries;
 } HWVoiceIn;
 
 struct SWVoiceOut {
@@ -117,7 +122,7 @@ struct SWVoiceOut {
     char *name;
     struct mixeng_volume vol;
     struct audio_callback callback;
-    LIST_ENTRY (SWVoiceOut) entries;
+    QLIST_ENTRY (SWVoiceOut) entries;
 };
 
 struct SWVoiceIn {
@@ -133,7 +138,7 @@ struct SWVoiceIn {
     char *name;
     struct mixeng_volume vol;
     struct audio_callback callback;
-    LIST_ENTRY (SWVoiceIn) entries;
+    QLIST_ENTRY (SWVoiceIn) entries;
 };
 
 struct audio_driver {
@@ -148,16 +153,17 @@ struct audio_driver {
     int max_voices_in;
     int voice_size_out;
     int voice_size_in;
+    int ctl_caps;
 };
 
 struct audio_pcm_ops {
-    int  (*init_out)(HWVoiceOut *hw, struct audsettings *as);
+    int  (*init_out)(HWVoiceOut *hw, struct audsettings *as, void *drv_opaque);
     void (*fini_out)(HWVoiceOut *hw);
-    int  (*run_out) (HWVoiceOut *hw);
+    int  (*run_out) (HWVoiceOut *hw, int live);
     int  (*write)   (SWVoiceOut *sw, void *buf, int size);
     int  (*ctl_out) (HWVoiceOut *hw, int cmd, ...);
 
-    int  (*init_in) (HWVoiceIn *hw, struct audsettings *as);
+    int  (*init_in) (HWVoiceIn *hw, struct audsettings *as, void *drv_opaque);
     void (*fini_in) (HWVoiceIn *hw);
     int  (*run_in)  (HWVoiceIn *hw);
     int  (*read)    (SWVoiceIn *sw, void *buf, int size);
@@ -167,20 +173,20 @@ struct audio_pcm_ops {
 struct capture_callback {
     struct audio_capture_ops ops;
     void *opaque;
-    LIST_ENTRY (capture_callback) entries;
+    QLIST_ENTRY (capture_callback) entries;
 };
 
 struct CaptureVoiceOut {
     HWVoiceOut hw;
     void *buf;
-    LIST_HEAD (cb_listhead, capture_callback) cb_head;
-    LIST_ENTRY (CaptureVoiceOut) entries;
+    QLIST_HEAD (cb_listhead, capture_callback) cb_head;
+    QLIST_ENTRY (CaptureVoiceOut) entries;
 };
 
 struct SWVoiceCap {
     SWVoiceOut sw;
     CaptureVoiceOut *cap;
-    LIST_ENTRY (SWVoiceCap) entries;
+    QLIST_ENTRY (SWVoiceCap) entries;
 };
 
 struct AudioState {
@@ -188,10 +194,10 @@ struct AudioState {
     void *drv_opaque;
 
     QEMUTimer *ts;
-    LIST_HEAD (card_listhead, QEMUSoundCard) card_head;
-    LIST_HEAD (hw_in_listhead, HWVoiceIn) hw_head_in;
-    LIST_HEAD (hw_out_listhead, HWVoiceOut) hw_head_out;
-    LIST_HEAD (cap_listhead, CaptureVoiceOut) cap_head;
+    QLIST_HEAD (card_listhead, QEMUSoundCard) card_head;
+    QLIST_HEAD (hw_in_listhead, HWVoiceIn) hw_head_in;
+    QLIST_HEAD (hw_out_listhead, HWVoiceOut) hw_head_out;
+    QLIST_HEAD (cap_listhead, CaptureVoiceOut) cap_head;
     int nb_hw_voices_out;
     int nb_hw_voices_in;
     int vm_running;
@@ -201,13 +207,12 @@ extern struct audio_driver no_audio_driver;
 extern struct audio_driver oss_audio_driver;
 extern struct audio_driver sdl_audio_driver;
 extern struct audio_driver wav_audio_driver;
-extern struct audio_driver fmod_audio_driver;
 extern struct audio_driver alsa_audio_driver;
 extern struct audio_driver coreaudio_audio_driver;
 extern struct audio_driver dsound_audio_driver;
-extern struct audio_driver esd_audio_driver;
 extern struct audio_driver pa_audio_driver;
-extern struct mixeng_volume nominal_volume;
+extern struct audio_driver spice_audio_driver;
+extern const struct mixeng_volume nominal_volume;
 
 void audio_pcm_init_info (struct audio_pcm_info *info, struct audsettings *as);
 void audio_pcm_info_clear_buf (struct audio_pcm_info *info, void *buf, int len);
@@ -216,62 +221,33 @@ int  audio_pcm_sw_write (SWVoiceOut *sw, void *buf, int len);
 int  audio_pcm_hw_get_live_in (HWVoiceIn *hw);
 
 int  audio_pcm_sw_read (SWVoiceIn *sw, void *buf, int len);
-int  audio_pcm_hw_get_live_out (HWVoiceOut *hw);
-int  audio_pcm_hw_get_live_out2 (HWVoiceOut *hw, int *nb_live);
+
+int audio_pcm_hw_clip_out (HWVoiceOut *hw, void *pcm_buf,
+                           int live, int pending);
 
 int audio_bug (const char *funcname, int cond);
 void *audio_calloc (const char *funcname, int nmemb, size_t size);
 
+void audio_run (const char *msg);
+
 #define VOICE_ENABLE 1
 #define VOICE_DISABLE 2
+#define VOICE_VOLUME 3
+
+#define VOICE_VOLUME_CAP (1 << VOICE_VOLUME)
 
 static inline int audio_ring_dist (int dst, int src, int len)
 {
     return (dst >= src) ? (dst - src) : (len - src + dst);
 }
 
-#if defined __GNUC__
-#define GCC_ATTR __attribute__ ((__unused__, __format__ (__printf__, 1, 2)))
-#define INIT_FIELD(f) . f
-#define GCC_FMT_ATTR(n, m) __attribute__ ((__format__ (__printf__, n, m)))
-#else
-#define GCC_ATTR /**/
-#define INIT_FIELD(f) /**/
-#define GCC_FMT_ATTR(n, m)
-#endif
-
-static void GCC_ATTR dolog (const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start (ap, fmt);
-    AUD_vlog (AUDIO_CAP, fmt, ap);
-    va_end (ap);
-}
+#define dolog(fmt, ...) AUD_log(AUDIO_CAP, fmt, ## __VA_ARGS__)
 
 #ifdef DEBUG
-static void GCC_ATTR ldebug (const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start (ap, fmt);
-    AUD_vlog (AUDIO_CAP, fmt, ap);
-    va_end (ap);
-}
+#define ldebug(fmt, ...) AUD_log(AUDIO_CAP, fmt, ## __VA_ARGS__)
 #else
-#if defined NDEBUG && defined __GNUC__
-#define ldebug(...)
-#elif defined NDEBUG && defined _MSC_VER
-#define ldebug __noop
-#else
-static void GCC_ATTR ldebug (const char *fmt, ...)
-{
-    (void) fmt;
-}
+#define ldebug(fmt, ...) (void)0
 #endif
-#endif
-
-#undef GCC_ATTR
 
 #define AUDIO_STRINGIFY_(n) #n
 #define AUDIO_STRINGIFY(n) AUDIO_STRINGIFY_(n)
@@ -282,4 +258,4 @@ static void GCC_ATTR ldebug (const char *fmt, ...)
 #define AUDIO_FUNC __FILE__ ":" AUDIO_STRINGIFY (__LINE__)
 #endif
 
-#endif /* audio_int.h */
+#endif /* QEMU_AUDIO_INT_H */

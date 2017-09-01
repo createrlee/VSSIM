@@ -17,14 +17,12 @@
  * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "qemu/osdep.h"
 #include "qemu-common.h"
-#include "qemu-char.h"
-#include "sysemu.h"
-#include "net.h"
-#include "bt-host.h"
+#include "sysemu/bt.h"
+#include "qemu/main-loop.h"
 
 #ifndef _WIN32
-# include <errno.h>
 # include <sys/ioctl.h>
 # include <sys/uio.h>
 # ifdef CONFIG_BLUEZ
@@ -50,19 +48,19 @@ static void bt_host_send(struct HCIInfo *hci,
     struct bt_host_hci_s *s = (struct bt_host_hci_s *) hci;
     uint8_t pkt = type;
     struct iovec iv[2];
-    int ret;
 
     iv[0].iov_base = (void *)&pkt;
     iv[0].iov_len  = 1;
     iv[1].iov_base = (void *) data;
     iv[1].iov_len  = len;
 
-    while ((ret = writev(s->fd, iv, 2)) < 0)
+    while (writev(s->fd, iv, 2) < 0) {
         if (errno != EAGAIN && errno != EINTR) {
             fprintf(stderr, "qemu: error %i writing bluetooth packet.\n",
                             errno);
             return;
         }
+    }
 }
 
 static void bt_host_cmd(struct HCIInfo *hci, const uint8_t *data, int len)
@@ -78,13 +76,6 @@ static void bt_host_acl(struct HCIInfo *hci, const uint8_t *data, int len)
 static void bt_host_sco(struct HCIInfo *hci, const uint8_t *data, int len)
 {
     bt_host_send(hci, HCI_SCODATA_PKT, data, len);
-}
-
-static int bt_host_read_poll(void *opaque)
-{
-    struct bt_host_hci_s *s = (struct bt_host_hci_s *) opaque;
-
-    return !!s->hci.evt_recv;
 }
 
 static void bt_host_read(void *opaque)
@@ -138,6 +129,7 @@ static void bt_host_read(void *opaque)
             pktlen = MIN(pkt[2] + 3, s->len);
             s->len -= pktlen;
             pkt += pktlen;
+            break;
 
         default:
         bad_pkt:
@@ -179,20 +171,20 @@ struct HCIInfo *bt_host_hci(const char *id)
     hci_filter_all_ptypes(&flt);
     hci_filter_all_events(&flt);
 
-    if (setsockopt(fd, SOL_HCI, HCI_FILTER, &flt, sizeof(flt)) < 0) {
+    if (qemu_setsockopt(fd, SOL_HCI, HCI_FILTER, &flt, sizeof(flt)) < 0) {
         fprintf(stderr, "qemu: Can't set HCI filter on socket (%i)\n", errno);
         return 0;
     }
 # endif
 
-    s = qemu_mallocz(sizeof(struct bt_host_hci_s));
+    s = g_malloc0(sizeof(struct bt_host_hci_s));
     s->fd = fd;
     s->hci.cmd_send = bt_host_cmd;
     s->hci.sco_send = bt_host_sco;
     s->hci.acl_send = bt_host_acl;
     s->hci.bdaddr_set = bt_host_bdaddr_set;
 
-    qemu_set_fd_handler2(s->fd, bt_host_read_poll, bt_host_read, NULL, s);
+    qemu_set_fd_handler(s->fd, bt_host_read, NULL, s);
 
     return &s->hci;
 }

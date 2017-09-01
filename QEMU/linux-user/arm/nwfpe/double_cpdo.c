@@ -15,12 +15,12 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+    along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "qemu/osdep.h"
 #include "fpa11.h"
-#include "softfloat.h"
+#include "fpu/softfloat.h"
 #include "fpopcode.h"
 
 float64 float64_exp(float64 Fm);
@@ -150,7 +150,7 @@ unsigned int DoubleCPDO(const unsigned int opcode)
       case MNF_CODE:
       {
          unsigned int *p = (unsigned int*)&rFm;
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
          p[0] ^= 0x80000000;
 #else
          p[1] ^= 0x80000000;
@@ -162,7 +162,7 @@ unsigned int DoubleCPDO(const unsigned int opcode)
       case ABS_CODE:
       {
          unsigned int *p = (unsigned int*)&rFm;
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
          p[0] &= 0x7fffffff;
 #else
          p[1] &= 0x7fffffff;

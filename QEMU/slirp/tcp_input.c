@@ -38,7 +38,8 @@
  * terms and conditions of the copyright.
  */
 
-#include <slirp.h>
+#include "qemu/osdep.h"
+#include "slirp.h"
 #include "ip_icmp.h"
 
 #define	TCPREXMTTHRESH 3
@@ -136,7 +137,7 @@ tcp_reass(register struct tcpcb *tp, register struct tcpiphdr *ti,
 		i = q->ti_seq + q->ti_len - ti->ti_seq;
 		if (i > 0) {
 			if (i >= ti->ti_len) {
-				m_freem(m);
+				m_free(m);
 				/*
 				 * Try to present any queued data
 				 * at the left window edge to the user.
@@ -170,7 +171,7 @@ tcp_reass(register struct tcpcb *tp, register struct tcpiphdr *ti,
 		q = tcpiphdr_next(q);
 		m = tcpiphdr_prev(q)->ti_mbuf;
 		remque(tcpiphdr2qlink(tcpiphdr_prev(q)));
-		m_freem(m);
+		m_free(m);
 	}
 
 	/*
@@ -197,7 +198,7 @@ present:
 		m = ti->ti_mbuf;
 		ti = tcpiphdr_next(ti);
 		if (so->so_state & SS_FCANTSENDMORE)
-			m_freem(m);
+			m_free(m);
 		else {
 			if (so->so_emu) {
 				if (tcp_emu(so,m)) sbappend(so, m);
@@ -213,9 +214,10 @@ present:
  * protocol specification dated September, 1981 very closely.
  */
 void
-tcp_input(struct mbuf *m, int iphlen, struct socket *inso)
+tcp_input(struct mbuf *m, int iphlen, struct socket *inso, unsigned short af)
 {
-  	struct ip save_ip, *ip;
+	struct ip save_ip, *ip;
+	struct ip6 save_ip6, *ip6;
 	register struct tcpiphdr *ti;
 	caddr_t optp = NULL;
 	int optlen = 0;
@@ -227,12 +229,15 @@ tcp_input(struct mbuf *m, int iphlen, struct socket *inso)
 	int iss = 0;
 	u_long tiwin;
 	int ret;
+	struct sockaddr_storage lhost, fhost;
+	struct sockaddr_in *lhost4, *fhost4;
+	struct sockaddr_in6 *lhost6, *fhost6;
     struct ex_list *ex_ptr;
     Slirp *slirp;
 
 	DEBUG_CALL("tcp_input");
-	DEBUG_ARGS((dfd," m = %8lx  iphlen = %2d  inso = %lx\n",
-		    (long )m, iphlen, (long )inso ));
+	DEBUG_ARGS((dfd, " m = %p  iphlen = %2d  inso = %p\n",
+		    m, iphlen, inso));
 
 	/*
 	 * If called with m == 0, then we're continuing the connect
@@ -253,37 +258,83 @@ tcp_input(struct mbuf *m, int iphlen, struct socket *inso)
 	}
 	slirp = m->slirp;
 
-	/*
-	 * Get IP and TCP header together in first mbuf.
-	 * Note: IP leaves IP header in first mbuf.
-	 */
-	ti = mtod(m, struct tcpiphdr *);
-	if (iphlen > sizeof(struct ip )) {
-	  ip_stripoptions(m, (struct mbuf *)0);
-	  iphlen=sizeof(struct ip );
+	ip = mtod(m, struct ip *);
+	ip6 = mtod(m, struct ip6 *);
+
+	switch (af) {
+	case AF_INET:
+	    if (iphlen > sizeof(struct ip)) {
+	        ip_stripoptions(m, (struct mbuf *)0);
+	        iphlen = sizeof(struct ip);
+	    }
+	    /* XXX Check if too short */
+
+
+	    /*
+	     * Save a copy of the IP header in case we want restore it
+	     * for sending an ICMP error message in response.
+	     */
+	    save_ip = *ip;
+	    save_ip.ip_len += iphlen;
+
+	    /*
+	     * Get IP and TCP header together in first mbuf.
+	     * Note: IP leaves IP header in first mbuf.
+	     */
+	    m->m_data -= sizeof(struct tcpiphdr) - sizeof(struct ip)
+	                                         - sizeof(struct tcphdr);
+	    m->m_len += sizeof(struct tcpiphdr) - sizeof(struct ip)
+	                                        - sizeof(struct tcphdr);
+	    ti = mtod(m, struct tcpiphdr *);
+
+	    /*
+	     * Checksum extended TCP header and data.
+	     */
+	    tlen = ip->ip_len;
+	    tcpiphdr2qlink(ti)->next = tcpiphdr2qlink(ti)->prev = NULL;
+	    memset(&ti->ih_mbuf, 0 , sizeof(struct mbuf_ptr));
+	    memset(&ti->ti, 0, sizeof(ti->ti));
+	    ti->ti_x0 = 0;
+	    ti->ti_src = save_ip.ip_src;
+	    ti->ti_dst = save_ip.ip_dst;
+	    ti->ti_pr = save_ip.ip_p;
+	    ti->ti_len = htons((uint16_t)tlen);
+	    break;
+
+	case AF_INET6:
+	    /*
+	     * Save a copy of the IP header in case we want restore it
+	     * for sending an ICMP error message in response.
+	     */
+	    save_ip6 = *ip6;
+	    /*
+	     * Get IP and TCP header together in first mbuf.
+	     * Note: IP leaves IP header in first mbuf.
+	     */
+	    m->m_data -= sizeof(struct tcpiphdr) - (sizeof(struct ip6)
+	                                         + sizeof(struct tcphdr));
+	    m->m_len  += sizeof(struct tcpiphdr) - (sizeof(struct ip6)
+	                                         + sizeof(struct tcphdr));
+	    ti = mtod(m, struct tcpiphdr *);
+
+	    tlen = ip6->ip_pl;
+	    tcpiphdr2qlink(ti)->next = tcpiphdr2qlink(ti)->prev = NULL;
+	    memset(&ti->ih_mbuf, 0 , sizeof(struct mbuf_ptr));
+	    memset(&ti->ti, 0, sizeof(ti->ti));
+	    ti->ti_x0 = 0;
+	    ti->ti_src6 = save_ip6.ip_src;
+	    ti->ti_dst6 = save_ip6.ip_dst;
+	    ti->ti_nh6 = save_ip6.ip_nh;
+	    ti->ti_len = htons((uint16_t)tlen);
+	    break;
+
+	default:
+	    g_assert_not_reached();
 	}
-	/* XXX Check if too short */
 
-
-	/*
-	 * Save a copy of the IP header in case we want restore it
-	 * for sending an ICMP error message in response.
-	 */
-	ip=mtod(m, struct ip *);
-	save_ip = *ip;
-	save_ip.ip_len+= iphlen;
-
-	/*
-	 * Checksum extended TCP header and data.
-	 */
-	tlen = ((struct ip *)ti)->ip_len;
-        tcpiphdr2qlink(ti)->next = tcpiphdr2qlink(ti)->prev = NULL;
-        memset(&ti->ti_i.ih_mbuf, 0 , sizeof(struct mbuf_ptr));
-	ti->ti_x1 = 0;
-	ti->ti_len = htons((u_int16_t)tlen);
-	len = sizeof(struct ip ) + tlen;
-	if(cksum(m, len)) {
-	  goto drop;
+	len = ((sizeof(struct tcpiphdr) - sizeof(struct tcphdr)) + tlen);
+	if (cksum(m, len)) {
+	    goto drop;
 	}
 
 	/*
@@ -316,30 +367,34 @@ tcp_input(struct mbuf *m, int iphlen, struct socket *inso)
 	m->m_data += sizeof(struct tcpiphdr)+off-sizeof(struct tcphdr);
 	m->m_len  -= sizeof(struct tcpiphdr)+off-sizeof(struct tcphdr);
 
-    if (slirp->restricted) {
-        for (ex_ptr = slirp->exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
-            if (ex_ptr->ex_fport == ti->ti_dport &&
-                ti->ti_dst.s_addr == ex_ptr->ex_addr.s_addr) {
-                break;
-            }
-        }
-        if (!ex_ptr)
-            goto drop;
-    }
 	/*
 	 * Locate pcb for segment.
 	 */
 findso:
-	so = slirp->tcp_last_so;
-	if (so->so_fport != ti->ti_dport ||
-	    so->so_lport != ti->ti_sport ||
-	    so->so_laddr.s_addr != ti->ti_src.s_addr ||
-	    so->so_faddr.s_addr != ti->ti_dst.s_addr) {
-		so = solookup(&slirp->tcb, ti->ti_src, ti->ti_sport,
-			       ti->ti_dst, ti->ti_dport);
-		if (so)
-			slirp->tcp_last_so = so;
+	lhost.ss_family = af;
+	fhost.ss_family = af;
+	switch (af) {
+	case AF_INET:
+	    lhost4 = (struct sockaddr_in *) &lhost;
+	    lhost4->sin_addr = ti->ti_src;
+	    lhost4->sin_port = ti->ti_sport;
+	    fhost4 = (struct sockaddr_in *) &fhost;
+	    fhost4->sin_addr = ti->ti_dst;
+	    fhost4->sin_port = ti->ti_dport;
+	    break;
+	case AF_INET6:
+	    lhost6 = (struct sockaddr_in6 *) &lhost;
+	    lhost6->sin6_addr = ti->ti_src6;
+	    lhost6->sin6_port = ti->ti_sport;
+	    fhost6 = (struct sockaddr_in6 *) &fhost;
+	    fhost6->sin6_addr = ti->ti_dst6;
+	    fhost6->sin6_port = ti->ti_dport;
+	    break;
+	default:
+	    g_assert_not_reached();
 	}
+
+	so = solookup(&slirp->tcp_last_so, &slirp->tcb, &lhost, &fhost);
 
 	/*
 	 * If the state is CLOSED (i.e., TCB does not exist) then
@@ -355,6 +410,22 @@ findso:
 	 * as if it was LISTENING, and continue...
 	 */
         if (so == NULL) {
+          if (slirp->restricted) {
+            /* Any hostfwds will have an existing socket, so we only get here
+             * for non-hostfwd connections. These should be dropped, unless it
+             * happens to be a guestfwd.
+             */
+            for (ex_ptr = slirp->exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
+                if (ex_ptr->ex_fport == ti->ti_dport &&
+                    ti->ti_dst.s_addr == ex_ptr->ex_addr.s_addr) {
+                    break;
+                }
+            }
+            if (!ex_ptr) {
+                goto dropwithreset;
+            }
+          }
+
 	  if ((tiflags & (TH_SYN|TH_FIN|TH_RST|TH_URG|TH_ACK)) != TH_SYN)
 	    goto dropwithreset;
 
@@ -368,13 +439,21 @@ findso:
 	  sbreserve(&so->so_snd, TCP_SNDSPACE);
 	  sbreserve(&so->so_rcv, TCP_RCVSPACE);
 
-	  so->so_laddr = ti->ti_src;
-	  so->so_lport = ti->ti_sport;
-	  so->so_faddr = ti->ti_dst;
-	  so->so_fport = ti->ti_dport;
+	  so->lhost.ss = lhost;
+	  so->fhost.ss = fhost;
 
-	  if ((so->so_iptos = tcp_tos(so)) == 0)
-	    so->so_iptos = ((struct ip *)ti)->ip_tos;
+	  so->so_iptos = tcp_tos(so);
+	  if (so->so_iptos == 0) {
+	      switch (af) {
+	      case AF_INET:
+	          so->so_iptos = ((struct ip *)ti)->ip_tos;
+	          break;
+	      case AF_INET6:
+	          break;
+	      default:
+	          g_assert_not_reached();
+	      }
+	  }
 
 	  tp = sototcpcb(so);
 	  tp->t_state = TCPS_LISTEN;
@@ -451,7 +530,7 @@ findso:
 				acked = ti->ti_ack - tp->snd_una;
 				sbdrop(&so->so_snd, acked);
 				tp->snd_una = ti->ti_ack;
-				m_freem(m);
+				m_free(m);
 
 				/*
 				 * If all outstanding data are acked, stop
@@ -517,7 +596,7 @@ findso:
           win = sbspace(&so->so_rcv);
 	  if (win < 0)
 	    win = 0;
-	  tp->rcv_wnd = max(win, (int)(tp->rcv_adv - tp->rcv_nxt));
+          tp->rcv_wnd = MAX(win, (int)(tp->rcv_adv - tp->rcv_nxt));
 	}
 
 	switch (tp->t_state) {
@@ -553,8 +632,9 @@ findso:
 	   * If this is destined for the control address, then flag to
 	   * tcp_ctl once connected, otherwise connect
 	   */
-	  if ((so->so_faddr.s_addr & slirp->vnetwork_mask.s_addr) ==
-	      slirp->vnetwork_addr.s_addr) {
+	  if (af == AF_INET &&
+	         (so->so_faddr.s_addr & slirp->vnetwork_mask.s_addr) ==
+	         slirp->vnetwork_addr.s_addr) {
 	    if (so->so_faddr.s_addr != slirp->vhost_addr.s_addr &&
 		so->so_faddr.s_addr != slirp->vnameserver_addr.s_addr) {
 		/* May be an add exec */
@@ -578,26 +658,62 @@ findso:
 	    goto cont_input;
 	  }
 
-	  if((tcp_fconnect(so) == -1) && (errno != EINPROGRESS) && (errno != EWOULDBLOCK)) {
-	    u_char code=ICMP_UNREACH_NET;
-	    DEBUG_MISC((dfd," tcp fconnect errno = %d-%s\n",
+	  if ((tcp_fconnect(so, so->so_ffamily) == -1) &&
+              (errno != EAGAIN) &&
+              (errno != EINPROGRESS) && (errno != EWOULDBLOCK)
+          ) {
+	    uint8_t code;
+	    DEBUG_MISC((dfd, " tcp fconnect errno = %d-%s\n",
 			errno,strerror(errno)));
 	    if(errno == ECONNREFUSED) {
 	      /* ACK the SYN, send RST to refuse the connection */
-	      tcp_respond(tp, ti, m, ti->ti_seq+1, (tcp_seq)0,
-			  TH_RST|TH_ACK);
+	      tcp_respond(tp, ti, m, ti->ti_seq + 1, (tcp_seq) 0,
+			  TH_RST | TH_ACK, af);
 	    } else {
-	      if(errno == EHOSTUNREACH) code=ICMP_UNREACH_HOST;
+	      switch (af) {
+	      case AF_INET:
+		code = ICMP_UNREACH_NET;
+		if (errno == EHOSTUNREACH) {
+		  code = ICMP_UNREACH_HOST;
+		}
+		break;
+	      case AF_INET6:
+		code = ICMP6_UNREACH_NO_ROUTE;
+		if (errno == EHOSTUNREACH) {
+		  code = ICMP6_UNREACH_ADDRESS;
+		}
+		break;
+	      default:
+		g_assert_not_reached();
+	      }
 	      HTONL(ti->ti_seq);             /* restore tcp header */
 	      HTONL(ti->ti_ack);
 	      HTONS(ti->ti_win);
 	      HTONS(ti->ti_urp);
 	      m->m_data -= sizeof(struct tcpiphdr)+off-sizeof(struct tcphdr);
 	      m->m_len  += sizeof(struct tcpiphdr)+off-sizeof(struct tcphdr);
-	      *ip=save_ip;
-	      icmp_error(m, ICMP_UNREACH,code, 0,strerror(errno));
+	      switch (af) {
+	      case AF_INET:
+		m->m_data += sizeof(struct tcpiphdr) - sizeof(struct ip)
+						     - sizeof(struct tcphdr);
+		m->m_len  -= sizeof(struct tcpiphdr) - sizeof(struct ip)
+						     - sizeof(struct tcphdr);
+		*ip = save_ip;
+		icmp_send_error(m, ICMP_UNREACH, code, 0, strerror(errno));
+		break;
+	      case AF_INET6:
+		m->m_data += sizeof(struct tcpiphdr) - (sizeof(struct ip6)
+						     + sizeof(struct tcphdr));
+		m->m_len  -= sizeof(struct tcpiphdr) - (sizeof(struct ip6)
+						     + sizeof(struct tcphdr));
+		*ip6 = save_ip6;
+		icmp6_send_error(m, ICMP6_UNREACH, code);
+		break;
+	      default:
+		g_assert_not_reached();
+	      }
 	    }
-	    tp = tcp_close(tp);
+            tcp_close(tp);
 	    m_free(m);
 	  } else {
 	    /*
@@ -610,6 +726,13 @@ findso:
 	    so->so_ti = ti;
 	    tp->t_timer[TCPT_KEEP] = TCPTV_KEEP_INIT;
 	    tp->t_state = TCPS_SYN_RECEIVED;
+	    /*
+	     * Initialize receive sequence numbers now so that we can send a
+	     * valid RST if the remote end rejects our connection.
+	     */
+	    tp->irs = ti->ti_seq;
+	    tcp_rcvseqinit(tp);
+	    tcp_template(tp);
 	  }
 	  return;
 
@@ -660,8 +783,9 @@ findso:
 			goto dropwithreset;
 
 		if (tiflags & TH_RST) {
-			if (tiflags & TH_ACK)
-				tp = tcp_drop(tp,0); /* XXX Check t_softerror! */
+                        if (tiflags & TH_ACK) {
+                                tcp_drop(tp, 0); /* XXX Check t_softerror! */
+                        }
 			goto drop;
 		}
 
@@ -821,13 +945,13 @@ trimthenstep6:
 	case TCPS_FIN_WAIT_2:
 	case TCPS_CLOSE_WAIT:
 		tp->t_state = TCPS_CLOSED;
-		tp = tcp_close(tp);
+                tcp_close(tp);
 		goto drop;
 
 	case TCPS_CLOSING:
 	case TCPS_LAST_ACK:
 	case TCPS_TIME_WAIT:
-		tp = tcp_close(tp);
+                tcp_close(tp);
 		goto drop;
 	}
 
@@ -909,8 +1033,8 @@ trimthenstep6:
 
 		if (SEQ_LEQ(ti->ti_ack, tp->snd_una)) {
 			if (ti->ti_len == 0 && tiwin == tp->snd_wnd) {
-			  DEBUG_MISC((dfd," dup ack  m = %lx  so = %lx \n",
-				      (long )m, (long )so));
+			  DEBUG_MISC((dfd, " dup ack  m = %p  so = %p\n",
+				      m, so));
 				/*
 				 * If we have outstanding data (other than
 				 * a window probe), this is a completely
@@ -941,8 +1065,8 @@ trimthenstep6:
 				else if (++tp->t_dupacks == TCPREXMTTHRESH) {
 					tcp_seq onxt = tp->snd_nxt;
 					u_int win =
-					    min(tp->snd_wnd, tp->snd_cwnd) / 2 /
-						tp->t_maxseg;
+                                                MIN(tp->snd_wnd, tp->snd_cwnd) /
+                                                2 / tp->t_maxseg;
 
 					if (win < 2)
 						win = 2;
@@ -1014,7 +1138,7 @@ trimthenstep6:
 
 		  if (cw > tp->snd_ssthresh)
 		    incr = incr * incr / cw;
-		  tp->snd_cwnd = min(cw + incr, TCP_MAXWIN<<tp->snd_scale);
+                  tp->snd_cwnd = MIN(cw + incr, TCP_MAXWIN << tp->snd_scale);
 		}
 		if (acked > so->so_snd.sb_cc) {
 			tp->snd_wnd -= so->so_snd.sb_cc;
@@ -1074,7 +1198,7 @@ trimthenstep6:
 		 */
 		case TCPS_LAST_ACK:
 			if (ourfinisacked) {
-				tp = tcp_close(tp);
+                                tcp_close(tp);
 				goto drop;
 			}
 			break;
@@ -1155,6 +1279,16 @@ step6:
 dodata:
 
 	/*
+	 * If this is a small packet, then ACK now - with Nagel
+	 *      congestion avoidance sender won't send more until
+	 *      he gets an ACK.
+	 */
+	if (ti->ti_len && (unsigned)ti->ti_len <= 5 &&
+	    ((struct tcpiphdr_2 *)ti)->first_char == (char)27) {
+		tp->t_flags |= TF_ACKNOW;
+	}
+
+	/*
 	 * Process the segment text, merging it into the TCP sequencing queue,
 	 * and arranging for acknowledgment of receipt if necessary.
 	 * This process logically involves adjusting tp->rcv_wnd as data
@@ -1165,12 +1299,6 @@ dodata:
 	if ((ti->ti_len || (tiflags&TH_FIN)) &&
 	    TCPS_HAVERCVDFIN(tp->t_state) == 0) {
 		TCP_REASS(tp, ti, m, so, tiflags);
-		/*
-		 * Note the amount of data that peer has sent into
-		 * our window, in order to estimate the sender's
-		 * buffer size.
-		 */
-		len = so->so_rcv.sb_datalen - (tp->rcv_adv - tp->rcv_nxt);
 	} else {
 		m_free(m);
 		tiflags &= ~TH_FIN;
@@ -1239,18 +1367,6 @@ dodata:
 	}
 
 	/*
-	 * If this is a small packet, then ACK now - with Nagel
-	 *      congestion avoidance sender won't send more until
-	 *      he gets an ACK.
-	 *
-	 * See above.
-	 */
-	if (ti->ti_len && (unsigned)ti->ti_len <= 5 &&
-	    ((struct tcpiphdr_2 *)ti)->first_char == (char)27) {
-		tp->t_flags |= TF_ACKNOW;
-	}
-
-	/*
 	 * Return any desired output.
 	 */
 	if (needoutput || (tp->t_flags & TF_ACKNOW)) {
@@ -1265,7 +1381,7 @@ dropafterack:
 	 */
 	if (tiflags & TH_RST)
 		goto drop;
-	m_freem(m);
+	m_free(m);
 	tp->t_flags |= TF_ACKNOW;
 	(void) tcp_output(tp);
 	return;
@@ -1273,11 +1389,11 @@ dropafterack:
 dropwithreset:
 	/* reuses m if m!=NULL, m_free() unnecessary */
 	if (tiflags & TH_ACK)
-		tcp_respond(tp, ti, m, (tcp_seq)0, ti->ti_ack, TH_RST);
+		tcp_respond(tp, ti, m, (tcp_seq)0, ti->ti_ack, TH_RST, af);
 	else {
 		if (tiflags & TH_SYN) ti->ti_len++;
-		tcp_respond(tp, ti, m, ti->ti_seq+ti->ti_len, (tcp_seq)0,
-		    TH_RST|TH_ACK);
+		tcp_respond(tp, ti, m, ti->ti_seq + ti->ti_len, (tcp_seq) 0,
+		    TH_RST | TH_ACK, af);
 	}
 
 	return;
@@ -1287,18 +1403,16 @@ drop:
 	 * Drop space held by incoming segment and return.
 	 */
 	m_free(m);
-
-	return;
 }
 
 static void
 tcp_dooptions(struct tcpcb *tp, u_char *cp, int cnt, struct tcpiphdr *ti)
 {
-	u_int16_t mss;
+	uint16_t mss;
 	int opt, optlen;
 
 	DEBUG_CALL("tcp_dooptions");
-	DEBUG_ARGS((dfd," tp = %lx  cnt=%i \n", (long )tp, cnt));
+	DEBUG_ARGS((dfd, " tp = %p  cnt=%i\n", tp, cnt));
 
 	for (; cnt > 0; cnt -= optlen, cp += optlen) {
 		opt = cp[0];
@@ -1379,7 +1493,7 @@ tcp_xmit_timer(register struct tcpcb *tp, int rtt)
 	register short delta;
 
 	DEBUG_CALL("tcp_xmit_timer");
-	DEBUG_ARG("tp = %lx", (long)tp);
+	DEBUG_ARG("tp = %p", tp);
 	DEBUG_ARG("rtt = %d", rtt);
 
 	if (tp->t_srtt != 0) {
@@ -1467,13 +1581,25 @@ tcp_mss(struct tcpcb *tp, u_int offer)
 	int mss;
 
 	DEBUG_CALL("tcp_mss");
-	DEBUG_ARG("tp = %lx", (long)tp);
+	DEBUG_ARG("tp = %p", tp);
 	DEBUG_ARG("offer = %d", offer);
 
-	mss = min(IF_MTU, IF_MRU) - sizeof(struct tcpiphdr);
+	switch (so->so_ffamily) {
+	case AF_INET:
+            mss = MIN(IF_MTU, IF_MRU) - sizeof(struct tcphdr)
+	                              - sizeof(struct ip);
+	    break;
+	case AF_INET6:
+            mss = MIN(IF_MTU, IF_MRU) - sizeof(struct tcphdr)
+	                              - sizeof(struct ip6);
+	    break;
+	default:
+	    g_assert_not_reached();
+	}
+
 	if (offer)
-		mss = min(mss, offer);
-	mss = max(mss, 32);
+            mss = MIN(mss, offer);
+        mss = MAX(mss, 32);
 	if (mss < tp->t_maxseg || offer != 0)
 	   tp->t_maxseg = mss;
 

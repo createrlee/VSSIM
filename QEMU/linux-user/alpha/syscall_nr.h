@@ -20,7 +20,7 @@
 #define TARGET_NR_lseek		 19
 #define TARGET_NR_getxpid		 20
 #define TARGET_NR_osf_mount		 21
-#define TARGET_NR_umount		 22
+#define TARGET_NR_umount2		 22
 #define TARGET_NR_setuid		 23
 #define TARGET_NR_getxuid		 24
 #define TARGET_NR_exec_with_loader	 25	/* not implemented */
@@ -46,7 +46,7 @@
 #define TARGET_NR_open		 45
 #define TARGET_NR_osf_old_sigaction	 46	/* not implemented */
 #define TARGET_NR_getxgid		 47
-#define TARGET_NR_osf_sigprocmask	 48
+#define TARGET_NR_sigprocmask    48
 #define TARGET_NR_osf_getlogin	 49	/* not implemented */
 #define TARGET_NR_osf_setlogin	 50	/* not implemented */
 #define TARGET_NR_acct		 51
@@ -185,6 +185,10 @@
 #define TARGET_NR_osf_utsname	207
 #define TARGET_NR_lchown		208
 #define TARGET_NR_osf_shmat		209
+/* this has the usual shmat semantics so give it the name syscall.c expects
+ * so that our support for it is enabled.
+ */
+#define TARGET_NR_shmat TARGET_NR_osf_shmat
 #define TARGET_NR_shmctl		210
 #define TARGET_NR_shmdt		211
 #define TARGET_NR_shmget		212
@@ -255,7 +259,7 @@
 #define TARGET_NR_sysinfo		318
 #define TARGET_NR__sysctl		319
 /* 320 was sys_idle.  */
-#define TARGET_NR_oldumount		321
+#define TARGET_NR_umount		321
 #define TARGET_NR_swapon		322
 #define TARGET_NR_times		323
 #define TARGET_NR_personality	324
@@ -411,3 +415,38 @@
 #define TARGET_NR_signalfd			476
 #define TARGET_NR_timerfd			477
 #define TARGET_NR_eventfd			478
+#define TARGET_NR_recvmmsg                      479
+#define TARGET_NR_fallocate                     480
+#define TARGET_NR_timerfd_create                481
+#define TARGET_NR_timerfd_settime               482
+#define TARGET_NR_timerfd_gettime               483
+#define TARGET_NR_signalfd4                     484
+#define TARGET_NR_eventfd2                      485
+#define TARGET_NR_epoll_create1                 486
+#define TARGET_NR_dup3                          487
+#define TARGET_NR_pipe2                         488
+#define TARGET_NR_inotify_init1                 489
+#define TARGET_NR_preadv                        490
+#define TARGET_NR_pwritev                       491
+#define TARGET_NR_rt_tgsigqueueinfo             492
+#define TARGET_NR_perf_event_open               493
+#define TARGET_NR_fanotify_init                 494
+#define TARGET_NR_fanotify_mark                 495
+#define TARGET_NR_prlimit64                     496
+#define TARGET_NR_name_to_handle_at             497
+#define TARGET_NR_open_by_handle_at             498
+#define TARGET_NR_clock_adjtime                 499
+#define TARGET_NR_syncfs                        500
+#define TARGET_NR_setns                         501
+#define TARGET_NR_accept4                       502
+#define TARGET_NR_sendmmsg                      503
+#define TARGET_NR_process_vm_readv              504
+#define TARGET_NR_process_vm_writev             505
+#define TARGET_NR_kcmp                          506
+#define TARGET_NR_finit_module                  507
+#define TARGET_NR_sched_setattr                 508
+#define TARGET_NR_sched_getattr                 509
+#define TARGET_NR_renameat2                     510
+#define TARGET_NR_getrandom                     511
+#define TARGET_NR_memfd_create                  512
+#define TARGET_NR_execveat                      513

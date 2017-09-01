@@ -16,13 +16,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/mman.h>
+#include "qemu/osdep.h"
 
 #include "qemu.h"
 #include "qemu-common.h"
@@ -30,9 +24,8 @@
 
 //#define DEBUG_MMAP
 
-#if defined(USE_NPTL)
-pthread_mutex_t mmap_mutex;
-static int __thread mmap_lock_count;
+static pthread_mutex_t mmap_mutex = PTHREAD_MUTEX_INITIALIZER;
+static __thread int mmap_lock_count;
 
 void mmap_lock(void)
 {
@@ -46,6 +39,11 @@ void mmap_unlock(void)
     if (--mmap_lock_count == 0) {
         pthread_mutex_unlock(&mmap_mutex);
     }
+}
+
+bool have_mmap_lock(void)
+{
+    return mmap_lock_count > 0 ? true : false;
 }
 
 /* Grab lock to make sure things are in a consistent state after fork().  */
@@ -62,77 +60,6 @@ void mmap_fork_end(int child)
         pthread_mutex_init(&mmap_mutex, NULL);
     else
         pthread_mutex_unlock(&mmap_mutex);
-}
-#else
-/* We aren't threadsafe to start with, so no need to worry about locking.  */
-void mmap_lock(void)
-{
-}
-
-void mmap_unlock(void)
-{
-}
-#endif
-
-void *qemu_vmalloc(size_t size)
-{
-    void *p;
-    unsigned long addr;
-    mmap_lock();
-    /* Use map and mark the pages as used.  */
-    p = mmap(NULL, size, PROT_READ | PROT_WRITE,
-             MAP_PRIVATE | MAP_ANON, -1, 0);
-
-    addr = (unsigned long)p;
-    if (addr == (target_ulong) addr) {
-        /* Allocated region overlaps guest address space.
-           This may recurse.  */
-        page_set_flags(addr & TARGET_PAGE_MASK, TARGET_PAGE_ALIGN(addr + size),
-                       PAGE_RESERVED);
-    }
-
-    mmap_unlock();
-    return p;
-}
-
-void *qemu_malloc(size_t size)
-{
-    char * p;
-    size += 16;
-    p = qemu_vmalloc(size);
-    *(size_t *)p = size;
-    return p + 16;
-}
-
-/* We use map, which is always zero initialized.  */
-void * qemu_mallocz(size_t size)
-{
-    return qemu_malloc(size);
-}
-
-void qemu_free(void *ptr)
-{
-    /* FIXME: We should unmark the reserved pages here.  However this gets
-       complicated when one target page spans multiple host pages, so we
-       don't bother.  */
-    size_t *p;
-    p = (size_t *)((char *)ptr - 16);
-    munmap(p, *p);
-}
-
-void *qemu_realloc(void *ptr, size_t size)
-{
-    size_t old_size, copy;
-    void *new_ptr;
-
-    if (!ptr)
-        return qemu_malloc(size);
-    old_size = *(size_t *)((char *)ptr - 16);
-    copy = old_size < size ? old_size : size;
-    new_ptr = qemu_malloc(size);
-    memcpy(new_ptr, ptr, copy);
-    qemu_free(ptr);
-    return new_ptr;
 }
 
 /* NOTE: all the constants are the HOST ones, but addresses are target. */
@@ -240,7 +167,7 @@ static int mmap_frag(abi_ulong real_start,
            possible while it is a shared mapping */
         if ((flags & TARGET_BSD_MAP_FLAGMASK) == MAP_SHARED &&
             (prot & PROT_WRITE))
-            return -EINVAL;
+            return -1;
 
         /* adjust protection to be able to read */
         if (!(prot1 & PROT_WRITE))
@@ -261,12 +188,7 @@ static int mmap_frag(abi_ulong real_start,
     return 0;
 }
 
-#if defined(__CYGWIN__)
-/* Cygwin doesn't have a whole lot of address space.  */
-static abi_ulong mmap_next_start = 0x18000000;
-#else
 static abi_ulong mmap_next_start = 0x40000000;
-#endif
 
 unsigned long last_brk;
 

@@ -5,8 +5,8 @@
  * terms and conditions of the copyright.
  */
 
-#ifndef _MISC_H_
-#define _MISC_H_
+#ifndef MISC_H
+#define MISC_H
 
 struct ex_list {
 	int ex_pty;			/* Do we want a pty? */
@@ -15,12 +15,6 @@ struct ex_list {
 	const char *ex_exec;            /* Command line of what to exec */
 	struct ex_list *ex_next;
 };
-
-#ifndef HAVE_STRDUP
-char *strdup(const char *);
-#endif
-
-void do_wait(int);
 
 #define EMU_NONE 0x0
 
@@ -36,42 +30,29 @@ void do_wait(int);
 
 #define EMU_NOCONNECT 0x10	/* Don't connect */
 
-/* UDP emulations */
-#define EMU_TALK	0x1
-#define EMU_NTALK	0x2
-#define EMU_CUSEEME	0x3
-
 struct tos_t {
-	u_int16_t lport;
-	u_int16_t fport;
-	u_int8_t tos;
-	u_int8_t emu;
+    uint16_t lport;
+    uint16_t fport;
+    uint8_t tos;
+    uint8_t emu;
 };
 
 struct emu_t {
-	u_int16_t lport;
-	u_int16_t fport;
-	u_int8_t tos;
-	u_int8_t emu;
-	struct emu_t *next;
+    uint16_t lport;
+    uint16_t fport;
+    uint8_t tos;
+    uint8_t emu;
+    struct emu_t *next;
 };
 
-extern int x_port, x_server, x_display;
+struct slirp_quehead {
+    struct slirp_quehead *qh_link;
+    struct slirp_quehead *qh_rlink;
+};
 
-int show_x(char *, struct socket *);
-void redir_x(u_int32_t, int, int, int);
 void slirp_insque(void *, void *);
 void slirp_remque(void *);
 int add_exec(struct ex_list **, int, char *, struct in_addr, int);
-int slirp_openpty(int *, int *);
 int fork_exec(struct socket *so, const char *ex, int do_pty);
-void snooze_hup(int);
-void snooze(void);
-void relay(int);
-void add_emu(char *);
-void u_sleep(int);
-void fd_nonblock(int);
-void fd_block(int);
-int rsh_exec(struct socket *, struct socket *, char *, char *, char *);
 
 #endif

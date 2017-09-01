@@ -364,6 +364,29 @@
 #define TARGET_NR_sendmsg		360 /* new */
 #define TARGET_NR_recvmsg		361 /* new */
 #define TARGET_NR_accept04		362 /* new */
-
-#define TARGET_NR_syscalls		363
-
+#define TARGET_NR_preadv                363 /* new */
+#define TARGET_NR_pwritev               364 /* new */
+#define TARGET_NR_rt_tgsigqueueinfo     365 /* new */
+#define TARGET_NR_perf_event_open       366 /* new */
+#define TARGET_NR_recvmmsg              367 /* new */
+#define TARGET_NR_fanotify_init         368
+#define TARGET_NR_fanotify_mark         369
+#define TARGET_NR_prlimit64             370
+#define TARGET_NR_name_to_handle_at     371
+#define TARGET_NR_open_by_handle_at     372
+#define TARGET_NR_clock_adjtime         373
+#define TARGET_NR_syncfs                374
+#define TARGET_NR_setns                 375
+#define TARGET_NR_sendmmsg              376
+#define TARGET_NR_process_vm_readv      377
+#define TARGET_NR_process_vm_writev     378
+#define TARGET_NR_kcmp                  379
+#define TARGET_NR_finit_module          380
+#define TARGET_NR_sched_setattr         381
+#define TARGET_NR_sched_getattr         382
+#define TARGET_NR_renameat2             383
+#define TARGET_NR_seccomp               384
+#define TARGET_NR_getrandom             385
+#define TARGET_NR_memfd_create          386
+#define TARGET_NR_bpf                   387
+#define TARGET_NR_execveat              388

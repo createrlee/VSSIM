@@ -15,12 +15,12 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+    along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "qemu/osdep.h"
 #include "fpa11.h"
-#include "softfloat.h"
+#include "fpu/softfloat.h"
 #include "fpopcode.h"
 #include "fpsr.h"
 //#include "fpmodule.h"
@@ -38,25 +38,25 @@ const floatx80 floatx80Constant[] = {
 };
 
 const float64 float64Constant[] = {
-  0x0000000000000000ULL,		/* double 0.0 */
-  0x3ff0000000000000ULL,		/* double 1.0 */
-  0x4000000000000000ULL,		/* double 2.0 */
-  0x4008000000000000ULL,		/* double 3.0 */
-  0x4010000000000000ULL,		/* double 4.0 */
-  0x4014000000000000ULL,		/* double 5.0 */
-  0x3fe0000000000000ULL,		/* double 0.5 */
-  0x4024000000000000ULL			/* double 10.0 */
+  const_float64(0x0000000000000000ULL),		/* double 0.0 */
+  const_float64(0x3ff0000000000000ULL),		/* double 1.0 */
+  const_float64(0x4000000000000000ULL),		/* double 2.0 */
+  const_float64(0x4008000000000000ULL),		/* double 3.0 */
+  const_float64(0x4010000000000000ULL),		/* double 4.0 */
+  const_float64(0x4014000000000000ULL),		/* double 5.0 */
+  const_float64(0x3fe0000000000000ULL),		/* double 0.5 */
+  const_float64(0x4024000000000000ULL)			/* double 10.0 */
 };
 
 const float32 float32Constant[] = {
-  0x00000000,				/* single 0.0 */
-  0x3f800000,				/* single 1.0 */
-  0x40000000,				/* single 2.0 */
-  0x40400000,				/* single 3.0 */
-  0x40800000,				/* single 4.0 */
-  0x40a00000,				/* single 5.0 */
-  0x3f000000,				/* single 0.5 */
-  0x41200000				/* single 10.0 */
+  const_float32(0x00000000),				/* single 0.0 */
+  const_float32(0x3f800000),				/* single 1.0 */
+  const_float32(0x40000000),				/* single 2.0 */
+  const_float32(0x40400000),				/* single 3.0 */
+  const_float32(0x40800000),				/* single 4.0 */
+  const_float32(0x40a00000),				/* single 5.0 */
+  const_float32(0x3f000000),				/* single 0.5 */
+  const_float32(0x41200000)				/* single 10.0 */
 };
 
 unsigned int getRegisterCount(const unsigned int opcode)
@@ -89,25 +89,3 @@ unsigned int getDestinationSize(const unsigned int opcode)
 
   return(nRc);
 }
-
-/* condition code lookup table
- index into the table is test code: EQ, NE, ... LT, GT, AL, NV
- bit position in short is condition code: NZCV */
-static const unsigned short aCC[16] = {
-    0xF0F0, // EQ == Z set
-    0x0F0F, // NE
-    0xCCCC, // CS == C set
-    0x3333, // CC
-    0xFF00, // MI == N set
-    0x00FF, // PL
-    0xAAAA, // VS == V set
-    0x5555, // VC
-    0x0C0C, // HI == C set && Z clear
-    0xF3F3, // LS == C clear || Z set
-    0xAA55, // GE == (N==V)
-    0x55AA, // LT == (N!=V)
-    0x0A05, // GT == (!Z && (N==V))
-    0xF5FA, // LE == (Z || (N!=V))
-    0xFFFF, // AL always
-    0 // NV
-};

@@ -5,6 +5,9 @@
  * terms and conditions of the copyright.
  */
 
+#ifndef SLIRP_MAIN_H
+#define SLIRP_MAIN_H
+
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
@@ -14,7 +17,7 @@
 extern int slirp_socket;
 extern int slirp_socket_unit;
 extern int slirp_socket_port;
-extern u_int32_t slirp_socket_addr;
+extern uint32_t slirp_socket_addr;
 extern char *slirp_socket_passwd;
 extern int ctty_closed;
 
@@ -29,10 +32,8 @@ extern int ctty_closed;
 extern char *slirp_tty;
 extern char *exec_shell;
 extern u_int curtime;
-extern fd_set *global_readfds, *global_writefds, *global_xfds;
-extern struct in_addr our_addr;
 extern struct in_addr loopback_addr;
-extern struct in_addr dns_addr;
+extern unsigned long loopback_mask;
 extern char *username;
 extern char *socket_path;
 extern int towrite_max;
@@ -44,5 +45,7 @@ extern int tcp_keepintvl;
 #define PROTO_PPP 0x2
 #endif
 
-void if_encap(Slirp *slirp, const uint8_t *ip_data, int ip_data_len);
+int if_encap(Slirp *slirp, struct mbuf *ifm);
 ssize_t slirp_send(struct socket *so, const void *buf, size_t len, int flags);
+
+#endif

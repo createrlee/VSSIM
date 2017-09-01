@@ -15,18 +15,13 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+    along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __FPA11_H__
-#define __FPA11_H__
+#ifndef FPA11_H
+#define FPA11_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-
-#include <cpu.h>
+#include "cpu.h"
 
 #define GET_FPA11() (qemufpa)
 
@@ -44,7 +39,7 @@ extern CPUARMState *user_registers;
 
 /* includes */
 #include "fpsr.h"		/* FP control and status register definitions */
-#include "softfloat.h"
+#include "fpu/softfloat.h"
 
 #define		typeNone		0x00
 #define		typeSingle		0x01
@@ -90,9 +85,9 @@ typedef struct tagFPA11 {
 
 extern FPA11* qemufpa;
 
-extern void resetFPA11(void);
-extern void SetRoundingMode(const unsigned int);
-extern void SetRoundingPrecision(const unsigned int);
+void resetFPA11(void);
+void SetRoundingMode(const unsigned int);
+void SetRoundingPrecision(const unsigned int);
 
 static inline unsigned int readRegister(unsigned int reg)
 {
@@ -109,10 +104,10 @@ static inline void writeRegister(unsigned int x, unsigned int y)
 
 static inline void writeConditionCodes(unsigned int x)
 {
-        cpsr_write(user_registers,x,CPSR_NZCV);
+    cpsr_write(user_registers, x, CPSR_NZCV, CPSRWriteByInstr);
 }
 
-#define REG_PC 15
+#define ARM_REG_PC 15
 
 unsigned int EmulateAll(unsigned int opcode, FPA11* qfpa, CPUARMState* qregs);
 

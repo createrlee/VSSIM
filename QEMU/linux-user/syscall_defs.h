@@ -1,28 +1,36 @@
 /* common syscall defines for all architectures */
 
 /* Note: although the syscall numbers change between architectures,
-   most of them stay the same, so we handle it by puting ifdefs if
+   most of them stay the same, so we handle it by putting ifdefs if
    necessary */
+
+#ifndef SYSCALL_DEFS_H
+#define SYSCALL_DEFS_H
 
 #include "syscall_nr.h"
 
-#define SOCKOP_socket           1
-#define SOCKOP_bind             2
-#define SOCKOP_connect          3
-#define SOCKOP_listen           4
-#define SOCKOP_accept           5
-#define SOCKOP_getsockname      6
-#define SOCKOP_getpeername      7
-#define SOCKOP_socketpair       8
-#define SOCKOP_send             9
-#define SOCKOP_recv             10
-#define SOCKOP_sendto           11
-#define SOCKOP_recvfrom         12
-#define SOCKOP_shutdown         13
-#define SOCKOP_setsockopt       14
-#define SOCKOP_getsockopt       15
-#define SOCKOP_sendmsg          16
-#define SOCKOP_recvmsg          17
+
+/* socket operations for socketcall() */
+#define TARGET_SYS_SOCKET       1         /* socket()              */
+#define TARGET_SYS_BIND         2         /* bind()                */
+#define TARGET_SYS_CONNECT      3         /* connect()             */
+#define TARGET_SYS_LISTEN       4         /* listen()              */
+#define TARGET_SYS_ACCEPT       5         /* accept()              */
+#define TARGET_SYS_GETSOCKNAME  6         /* getsockname()         */
+#define TARGET_SYS_GETPEERNAME  7         /* getpeername()         */
+#define TARGET_SYS_SOCKETPAIR   8         /* socketpair()          */
+#define TARGET_SYS_SEND         9         /* send()                */
+#define TARGET_SYS_RECV         10        /* recv()                */
+#define TARGET_SYS_SENDTO       11        /* sendto()              */
+#define TARGET_SYS_RECVFROM     12        /* recvfrom()            */
+#define TARGET_SYS_SHUTDOWN     13        /* shutdown()            */
+#define TARGET_SYS_SETSOCKOPT   14        /* setsockopt()          */
+#define TARGET_SYS_GETSOCKOPT   15        /* getsockopt()          */
+#define TARGET_SYS_SENDMSG      16        /* sendmsg()             */
+#define TARGET_SYS_RECVMSG      17        /* recvmsg()             */
+#define TARGET_SYS_ACCEPT4      18        /* accept4()             */
+#define TARGET_SYS_RECVMMSG     19        /* recvmmsg()            */
+#define TARGET_SYS_SENDMMSG     20        /* sendmmsg()            */
 
 #define IPCOP_semop		1
 #define IPCOP_semget		2
@@ -48,14 +56,22 @@
 #define TARGET_IOC_NRBITS	8
 #define TARGET_IOC_TYPEBITS	8
 
-#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SPARC) \
+#if (defined(TARGET_I386) && defined(TARGET_ABI32)) \
+    || (defined(TARGET_ARM) && defined(TARGET_ABI32)) \
+    || defined(TARGET_SPARC) \
     || defined(TARGET_M68K) || defined(TARGET_SH4) || defined(TARGET_CRIS)
     /* 16 bit uid wrappers emulation */
 #define USE_UID16
+#define target_id uint16_t
+#else
+#define target_id uint32_t
 #endif
 
 #if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SH4) \
-    || defined(TARGET_M68K) || defined(TARGET_CRIS)
+    || defined(TARGET_M68K) || defined(TARGET_CRIS) \
+    || defined(TARGET_UNICORE32) || defined(TARGET_S390X) \
+    || defined(TARGET_OPENRISC) || defined(TARGET_TILEGX) \
+    || defined(TARGET_NIOS2)
 
 #define TARGET_IOC_SIZEBITS	14
 #define TARGET_IOC_DIRBITS	2
@@ -74,6 +90,15 @@
 #define TARGET_IOC_NONE	  1U
 #define TARGET_IOC_READ	  2U
 #define TARGET_IOC_WRITE  4U
+
+#elif defined(TARGET_HPPA)
+
+#define TARGET_IOC_SIZEBITS  14
+#define TARGET_IOC_DIRBITS    2
+
+#define TARGET_IOC_NONE   0U
+#define TARGET_IOC_WRITE  2U
+#define TARGET_IOC_READ   1U
 
 #else
 #error unsupported CPU
@@ -111,8 +136,52 @@ struct target_sockaddr {
     uint8_t sa_data[14];
 };
 
+struct target_sockaddr_ll {
+    uint16_t sll_family;   /* Always AF_PACKET */
+    uint16_t sll_protocol; /* Physical layer protocol */
+    int      sll_ifindex;  /* Interface number */
+    uint16_t sll_hatype;   /* ARP hardware type */
+    uint8_t  sll_pkttype;  /* Packet type */
+    uint8_t  sll_halen;    /* Length of address */
+    uint8_t  sll_addr[8];  /* Physical layer address */
+};
+
+struct target_sockaddr_un {
+    uint16_t su_family;
+    uint8_t sun_path[108];
+};
+
 struct target_in_addr {
     uint32_t s_addr; /* big endian */
+};
+
+struct target_sockaddr_in {
+  uint16_t sin_family;
+  int16_t sin_port; /* big endian */
+  struct target_in_addr sin_addr;
+  uint8_t __pad[sizeof(struct target_sockaddr) -
+                sizeof(uint16_t) - sizeof(int16_t) -
+                sizeof(struct target_in_addr)];
+};
+
+struct target_sockaddr_in6 {
+    uint16_t sin6_family;
+    uint16_t sin6_port; /* big endian */
+    uint32_t sin6_flowinfo; /* big endian */
+    struct in6_addr sin6_addr; /* IPv6 address, big endian */
+    uint32_t sin6_scope_id;
+};
+
+struct target_sock_filter {
+    abi_ushort code;
+    uint8_t jt;
+    uint8_t jf;
+    abi_uint k;
+};
+
+struct target_sock_fprog {
+    abi_ushort len;
+    abi_ulong filter;
 };
 
 struct target_ip_mreq {
@@ -143,9 +212,47 @@ struct target_timespec {
     abi_long tv_nsec;
 };
 
+struct target_timezone {
+    abi_int tz_minuteswest;
+    abi_int tz_dsttime;
+};
+
 struct target_itimerval {
     struct target_timeval it_interval;
     struct target_timeval it_value;
+};
+
+struct target_itimerspec {
+    struct target_timespec it_interval;
+    struct target_timespec it_value;
+};
+
+struct target_timex {
+    abi_uint modes;              /* Mode selector */
+    abi_long offset;             /* Time offset */
+    abi_long freq;               /* Frequency offset */
+    abi_long maxerror;           /* Maximum error (microseconds) */
+    abi_long esterror;           /* Estimated error (microseconds) */
+    abi_int status;              /* Clock command/status */
+    abi_long constant;           /* PLL (phase-locked loop) time constant */
+    abi_long precision;          /* Clock precision (microseconds, ro) */
+    abi_long tolerance;          /* Clock freq. tolerance (ppm, ro) */
+    struct target_timeval time;  /* Current time */
+    abi_long tick;               /* Microseconds between clock ticks */
+    abi_long ppsfreq;            /* PPS (pulse per second) frequency */
+    abi_long jitter;             /* PPS jitter (ro); nanoseconds */
+    abi_int shift;               /* PPS interval duration (seconds) */
+    abi_long stabil;             /* PPS stability */
+    abi_long jitcnt;             /* PPS jitter limit exceeded (ro) */
+    abi_long calcnt;             /* PPS calibration intervals */
+    abi_long errcnt;             /* PPS calibration errors */
+    abi_long stbcnt;             /* PPS stability limit exceeded */
+    abi_int tai;                 /* TAI offset */
+
+    /* Further padding bytes to allow for future expansion */
+    abi_int:32; abi_int:32; abi_int:32; abi_int:32;
+    abi_int:32; abi_int:32; abi_int:32; abi_int:32;
+    abi_int:32; abi_int:32; abi_int:32;
 };
 
 typedef abi_long target_clock_t;
@@ -192,7 +299,8 @@ struct target_cmsghdr {
 };
 
 #define TARGET_CMSG_DATA(cmsg) ((unsigned char *) ((struct target_cmsghdr *) (cmsg) + 1))
-#define TARGET_CMSG_NXTHDR(mhdr, cmsg) __target_cmsg_nxthdr (mhdr, cmsg)
+#define TARGET_CMSG_NXTHDR(mhdr, cmsg, cmsg_start) \
+                               __target_cmsg_nxthdr(mhdr, cmsg, cmsg_start)
 #define TARGET_CMSG_ALIGN(len) (((len) + sizeof (abi_long) - 1) \
                                & (size_t) ~(sizeof (abi_long) - 1))
 #define TARGET_CMSG_SPACE(len) (TARGET_CMSG_ALIGN (len) \
@@ -200,19 +308,26 @@ struct target_cmsghdr {
 #define TARGET_CMSG_LEN(len)   (TARGET_CMSG_ALIGN (sizeof (struct target_cmsghdr)) + (len))
 
 static __inline__ struct target_cmsghdr *
-__target_cmsg_nxthdr (struct target_msghdr *__mhdr, struct target_cmsghdr *__cmsg)
+__target_cmsg_nxthdr(struct target_msghdr *__mhdr,
+                     struct target_cmsghdr *__cmsg,
+                     struct target_cmsghdr *__cmsg_start)
 {
   struct target_cmsghdr *__ptr;
 
   __ptr = (struct target_cmsghdr *)((unsigned char *) __cmsg
-                                    + TARGET_CMSG_ALIGN (tswapl(__cmsg->cmsg_len)));
-  if ((unsigned long)((char *)(__ptr+1) - (char *)(size_t)tswapl(__mhdr->msg_control))
-      > tswapl(__mhdr->msg_controllen))
+                                    + TARGET_CMSG_ALIGN (tswapal(__cmsg->cmsg_len)));
+  if ((unsigned long)((char *)(__ptr+1) - (char *)__cmsg_start)
+      > tswapal(__mhdr->msg_controllen)) {
     /* No more entries.  */
     return (struct target_cmsghdr *)0;
-  return __cmsg;
+  }
+  return __ptr;
 }
 
+struct target_mmsghdr {
+    struct target_msghdr msg_hdr;              /* Message header */
+    unsigned int         msg_len;              /* Number of bytes transmitted */
+};
 
 struct  target_rusage {
         struct target_timeval ru_utime;        /* user time used */
@@ -251,10 +366,10 @@ struct kernel_statfs {
 };
 
 struct target_dirent {
-	abi_long	d_ino;
-	abi_long	d_off;
-	unsigned short	d_reclen;
-	char		d_name[256]; /* We must not include limits.h! */
+        abi_long        d_ino;
+        abi_long        d_off;
+        unsigned short  d_reclen;
+        char            d_name[];
 };
 
 struct target_dirent64 {
@@ -288,7 +403,7 @@ static inline void tswap_sigset(target_sigset_t *d, const target_sigset_t *s)
 {
     int i;
     for(i = 0;i < TARGET_NSIG_WORDS; i++)
-        d->sig[i] = tswapl(s->sig[i]);
+        d->sig[i] = tswapal(s->sig[i]);
 }
 #else
 static inline void tswap_sigset(target_sigset_t *d, const target_sigset_t *s)
@@ -315,7 +430,12 @@ struct target_sigaction;
 int do_sigaction(int sig, const struct target_sigaction *act,
                  struct target_sigaction *oact);
 
-#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_MIPS) || defined (TARGET_SH4) || defined(TARGET_M68K) || defined(TARGET_ALPHA) || defined(TARGET_CRIS) || defined(TARGET_MICROBLAZE)
+#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SPARC) \
+    || defined(TARGET_PPC) || defined(TARGET_MIPS) || defined(TARGET_SH4) \
+    || defined(TARGET_M68K) || defined(TARGET_ALPHA) || defined(TARGET_CRIS) \
+    || defined(TARGET_MICROBLAZE) || defined(TARGET_UNICORE32) \
+    || defined(TARGET_S390X) || defined(TARGET_OPENRISC) \
+    || defined(TARGET_TILEGX) || defined(TARGET_HPPA) || defined(TARGET_NIOS2)
 
 #if defined(TARGET_SPARC)
 #define TARGET_SA_NOCLDSTOP    8u
@@ -336,6 +456,22 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 #if !defined(TARGET_ABI_MIPSN32) && !defined(TARGET_ABI_MIPSN64)
 #define TARGET_SA_RESTORER	0x04000000	/* Only for O32 */
 #endif
+#elif defined(TARGET_OPENRISC)
+#define TARGET_SA_NOCLDSTOP    0x00000001
+#define TARGET_SA_NOCLDWAIT    0x00000002
+#define TARGET_SA_SIGINFO      0x00000004
+#define TARGET_SA_ONSTACK      0x08000000
+#define TARGET_SA_RESTART      0x10000000
+#define TARGET_SA_NODEFER      0x40000000
+#define TARGET_SA_RESETHAND    0x80000000
+#elif defined(TARGET_ALPHA)
+#define TARGET_SA_ONSTACK	0x00000001
+#define TARGET_SA_RESTART	0x00000002
+#define TARGET_SA_NOCLDSTOP	0x00000004
+#define TARGET_SA_NODEFER	0x00000008
+#define TARGET_SA_RESETHAND	0x00000010
+#define TARGET_SA_NOCLDWAIT	0x00000020 /* not supported yet */
+#define TARGET_SA_SIGINFO	0x00000040
 #else
 #define TARGET_SA_NOCLDSTOP	0x00000001
 #define TARGET_SA_NOCLDWAIT	0x00000002 /* not supported yet */
@@ -347,7 +483,46 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 #define TARGET_SA_RESTORER	0x04000000
 #endif
 
-#if defined(TARGET_SPARC)
+#if defined(TARGET_ALPHA)
+
+#define TARGET_SIGHUP            1
+#define TARGET_SIGINT            2
+#define TARGET_SIGQUIT           3
+#define TARGET_SIGILL            4
+#define TARGET_SIGTRAP           5
+#define TARGET_SIGABRT           6
+#define TARGET_SIGSTKFLT         7 /* actually SIGEMT */
+#define TARGET_SIGFPE            8
+#define TARGET_SIGKILL           9
+#define TARGET_SIGBUS           10
+#define TARGET_SIGSEGV          11
+#define TARGET_SIGSYS           12
+#define TARGET_SIGPIPE          13
+#define TARGET_SIGALRM          14
+#define TARGET_SIGTERM          15
+#define TARGET_SIGURG           16
+#define TARGET_SIGSTOP          17
+#define TARGET_SIGTSTP          18
+#define TARGET_SIGCONT          19
+#define TARGET_SIGCHLD          20
+#define TARGET_SIGTTIN          21
+#define TARGET_SIGTTOU          22
+#define TARGET_SIGIO            23
+#define TARGET_SIGXCPU          24
+#define TARGET_SIGXFSZ          25
+#define TARGET_SIGVTALRM        26
+#define TARGET_SIGPROF          27
+#define TARGET_SIGWINCH         28
+#define TARGET_SIGPWR           29 /* actually SIGINFO */
+#define TARGET_SIGUSR1          30
+#define TARGET_SIGUSR2          31
+#define TARGET_SIGRTMIN         32
+
+#define TARGET_SIG_BLOCK         1
+#define TARGET_SIG_UNBLOCK       2
+#define TARGET_SIG_SETMASK       3
+
+#elif defined(TARGET_SPARC)
 
 #define TARGET_SIGHUP		 1
 #define TARGET_SIGINT		 2
@@ -430,8 +605,49 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 #define TARGET_SIG_UNBLOCK	2	/* for unblocking signals */
 #define TARGET_SIG_SETMASK	3	/* for setting the signal mask */
 
+#elif defined(TARGET_HPPA)
+
+#define TARGET_SIGHUP           1
+#define TARGET_SIGINT           2
+#define TARGET_SIGQUIT          3
+#define TARGET_SIGILL           4
+#define TARGET_SIGTRAP          5
+#define TARGET_SIGABRT          6
+#define TARGET_SIGIOT           6
+#define TARGET_SIGSTKFLT        7
+#define TARGET_SIGFPE           8
+#define TARGET_SIGKILL          9
+#define TARGET_SIGBUS          10
+#define TARGET_SIGSEGV         11
+#define TARGET_SIGXCPU         12
+#define TARGET_SIGPIPE         13
+#define TARGET_SIGALRM         14
+#define TARGET_SIGTERM         15
+#define TARGET_SIGUSR1         16
+#define TARGET_SIGUSR2         17
+#define TARGET_SIGCHLD         18
+#define TARGET_SIGPWR          19
+#define TARGET_SIGVTALRM       20
+#define TARGET_SIGPROF         21
+#define TARGET_SIGIO           22
+#define TARGET_SIGPOLL         TARGET_SIGIO
+#define TARGET_SIGWINCH        23
+#define TARGET_SIGSTOP         24
+#define TARGET_SIGTSTP         25
+#define TARGET_SIGCONT         26
+#define TARGET_SIGTTIN         27
+#define TARGET_SIGTTOU         28
+#define TARGET_SIGURG          29
+#define TARGET_SIGXFSZ         30
+#define TARGET_SIGSYS          31
+
+#define TARGET_SIG_BLOCK       0
+#define TARGET_SIG_UNBLOCK     1
+#define TARGET_SIG_SETMASK     2
+
 #else
 
+/* OpenRISC Using the general signals */
 #define TARGET_SIGHUP		 1
 #define TARGET_SIGINT		 2
 #define TARGET_SIGQUIT		 3
@@ -472,8 +688,28 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 
 #endif
 
-#if defined(TARGET_MIPS)
+#if defined(TARGET_ALPHA)
+struct target_old_sigaction {
+    abi_ulong _sa_handler;
+    abi_ulong sa_mask;
+    int32_t sa_flags;
+};
 
+struct target_rt_sigaction {
+    abi_ulong _sa_handler;
+    abi_ulong sa_flags;
+    target_sigset_t sa_mask;
+};
+
+/* This is the struct used inside the kernel.  The ka_restorer
+   field comes from the 5th argument to sys_rt_sigaction.  */
+struct target_sigaction {
+    abi_ulong _sa_handler;
+    abi_ulong sa_flags;
+    target_sigset_t sa_mask;
+    abi_ulong sa_restorer;
+};
+#elif defined(TARGET_MIPS)
 struct target_sigaction {
 	uint32_t	sa_flags;
 #if defined(TARGET_ABI_MIPSN32)
@@ -483,7 +719,6 @@ struct target_sigaction {
 #endif
 	target_sigset_t	sa_mask;
 };
-
 #else
 struct target_old_sigaction {
         abi_ulong _sa_handler;
@@ -530,7 +765,29 @@ typedef struct {
 #endif
 
 #define TARGET_SI_MAX_SIZE	128
-#define TARGET_SI_PAD_SIZE	((TARGET_SI_MAX_SIZE/sizeof(int)) - 3)
+
+#if TARGET_ABI_BITS == 32
+#define TARGET_SI_PREAMBLE_SIZE (3 * sizeof(int))
+#else
+#define TARGET_SI_PREAMBLE_SIZE (4 * sizeof(int))
+#endif
+
+#define TARGET_SI_PAD_SIZE ((TARGET_SI_MAX_SIZE - TARGET_SI_PREAMBLE_SIZE) / sizeof(int))
+
+/* Within QEMU the top 16 bits of si_code indicate which of the parts of
+ * the union in target_siginfo is valid. This only applies between
+ * host_to_target_siginfo_noswap() and tswap_siginfo(); it does not
+ * appear either within host siginfo_t or in target_siginfo structures
+ * which we get from the guest userspace program. (The Linux kernel
+ * does a similar thing with using the top bits for its own internal
+ * purposes but not letting them be visible to userspace.)
+ */
+#define QEMU_SI_KILL 0
+#define QEMU_SI_TIMER 1
+#define QEMU_SI_POLL 2
+#define QEMU_SI_FAULT 3
+#define QEMU_SI_CHLD 4
+#define QEMU_SI_RT 5
 
 typedef struct target_siginfo {
 #ifdef TARGET_MIPS
@@ -610,6 +867,10 @@ typedef struct target_siginfo {
 #define TARGET_ILL_PRVREG	(6)	/* privileged register */
 #define TARGET_ILL_COPROC	(7)	/* coprocessor error */
 #define TARGET_ILL_BADSTK	(8)	/* internal stack error */
+#ifdef TARGET_TILEGX
+#define TARGET_ILL_DBLFLT       (9)     /* double fault */
+#define TARGET_ILL_HARDWALL     (10)    /* user networks hardwall violation */
+#endif
 
 /*
  * SIGFPE si_codes
@@ -629,19 +890,26 @@ typedef struct target_siginfo {
  */
 #define TARGET_SEGV_MAPERR     (1)  /* address not mapped to object */
 #define TARGET_SEGV_ACCERR     (2)  /* invalid permissions for mapped object */
+#define TARGET_SEGV_BNDERR     (3)  /* failed address bound checks */
 
 /*
  * SIGBUS si_codes
  */
 #define TARGET_BUS_ADRALN       (1)	/* invalid address alignment */
-#define TARGET_BUS_ADRERR       (2)	/* non-existant physical address */
+#define TARGET_BUS_ADRERR       (2)	/* non-existent physical address */
 #define TARGET_BUS_OBJERR       (3)	/* object specific hardware error */
+/* hardware memory error consumed on a machine check: action required */
+#define TARGET_BUS_MCEERR_AR    (4)
+/* hardware memory error detected in process but not consumed: action optional*/
+#define TARGET_BUS_MCEERR_AO    (5)
 
 /*
  * SIGTRAP si_codes
  */
 #define TARGET_TRAP_BRKPT	(1)	/* process breakpoint */
 #define TARGET_TRAP_TRACE	(2)	/* process trace trap */
+#define TARGET_TRAP_BRANCH      (3)     /* process taken branch trap */
+#define TARGET_TRAP_HWBKPT      (4)     /* hardware breakpoint/watchpoint */
 
 #endif /* defined(TARGET_I386) || defined(TARGET_ARM) */
 
@@ -649,6 +917,53 @@ struct target_rlimit {
         abi_ulong   rlim_cur;
         abi_ulong   rlim_max;
 };
+
+#if defined(TARGET_ALPHA)
+#define TARGET_RLIM_INFINITY	0x7fffffffffffffffull
+#elif defined(TARGET_MIPS) || (defined(TARGET_SPARC) && TARGET_ABI_BITS == 32)
+#define TARGET_RLIM_INFINITY	0x7fffffffUL
+#else
+#define TARGET_RLIM_INFINITY	((abi_ulong)-1)
+#endif
+
+#if defined(TARGET_MIPS)
+#define TARGET_RLIMIT_CPU		0
+#define TARGET_RLIMIT_FSIZE		1
+#define TARGET_RLIMIT_DATA		2
+#define TARGET_RLIMIT_STACK		3
+#define TARGET_RLIMIT_CORE		4
+#define TARGET_RLIMIT_RSS		7
+#define TARGET_RLIMIT_NPROC		8
+#define TARGET_RLIMIT_NOFILE		5
+#define TARGET_RLIMIT_MEMLOCK		9
+#define TARGET_RLIMIT_AS		6
+#define TARGET_RLIMIT_LOCKS		10
+#define TARGET_RLIMIT_SIGPENDING	11
+#define TARGET_RLIMIT_MSGQUEUE		12
+#define TARGET_RLIMIT_NICE		13
+#define TARGET_RLIMIT_RTPRIO		14
+#else
+#define TARGET_RLIMIT_CPU		0
+#define TARGET_RLIMIT_FSIZE		1
+#define TARGET_RLIMIT_DATA		2
+#define TARGET_RLIMIT_STACK		3
+#define TARGET_RLIMIT_CORE		4
+#define TARGET_RLIMIT_RSS		5
+#if defined(TARGET_SPARC)
+#define TARGET_RLIMIT_NOFILE		6
+#define TARGET_RLIMIT_NPROC		7
+#else
+#define TARGET_RLIMIT_NPROC		6
+#define TARGET_RLIMIT_NOFILE		7
+#endif
+#define TARGET_RLIMIT_MEMLOCK		8
+#define TARGET_RLIMIT_AS		9
+#define TARGET_RLIMIT_LOCKS		10
+#define TARGET_RLIMIT_SIGPENDING	11
+#define TARGET_RLIMIT_MSGQUEUE		12
+#define TARGET_RLIMIT_NICE		13
+#define TARGET_RLIMIT_RTPRIO		14
+#endif
 
 struct target_pollfd {
     int fd;           /* file descriptor */
@@ -660,10 +975,26 @@ struct target_pollfd {
 #define TARGET_KIOCSOUND       0x4B2F	/* start sound generation (0 for off) */
 #define TARGET_KDMKTONE	       0x4B30	/* generate tone */
 #define TARGET_KDGKBTYPE       0x4b33
+#define TARGET_KDSETMODE       0x4b3a
+#define TARGET_KDGKBMODE       0x4b44
+#define TARGET_KDSKBMODE       0x4b45
 #define TARGET_KDGKBENT	       0x4B46	/* gets one entry in translation table */
 #define TARGET_KDGKBSENT       0x4B48	/* gets one function key string entry */
+#define TARGET_KDGKBLED        0x4B64	/* get led flags (not lights) */
+#define TARGET_KDSKBLED        0x4B65	/* set led flags (not lights) */
+#define TARGET_KDGETLED        0x4B31	/* return current led state */
+#define TARGET_KDSETLED        0x4B32	/* set led state [lights, not flags] */
+#define TARGET_KDSIGACCEPT     0x4B4E
 
+#if defined(TARGET_ALPHA) || defined(TARGET_MIPS) || defined(TARGET_SH4)
+#define TARGET_SIOCATMARK      TARGET_IOR('s', 7, int)
+#define TARGET_SIOCGPGRP       TARGET_IOR('s', 9, pid_t)
+#else
 #define TARGET_SIOCATMARK      0x8905
+#define TARGET_SIOCGPGRP       0x8904
+#endif
+#define TARGET_SIOCGSTAMP      0x8906          /* Get stamp (timeval) */
+#define TARGET_SIOCGSTAMPNS    0x8907          /* Get stamp (timespec) */
 
 /* Networking ioctls */
 #define TARGET_SIOCADDRT       0x890B          /* add routing table entry */
@@ -695,6 +1026,7 @@ struct target_pollfd {
 #define TARGET_SIOCSIFSLAVE    0x8930
 #define TARGET_SIOCADDMULTI    0x8931          /* Multicast address lists      */
 #define TARGET_SIOCDELMULTI    0x8932
+#define TARGET_SIOCGIFINDEX    0x8933
 
 /* Bridging control calls */
 #define TARGET_SIOCGIFBR       0x8940          /* Bridging support             */
@@ -724,6 +1056,9 @@ struct target_pollfd {
 #define TARGET_SIOCADDDLCI     0x8980          /* Create new DLCI device       */
 #define TARGET_SIOCDELDLCI     0x8981          /* Delete DLCI device           */
 
+/* From <linux/wireless.h> */
+
+#define TARGET_SIOCGIWNAME     0x8B01          /* get name == wireless protocol */
 
 /* From <linux/fs.h> */
 
@@ -739,12 +1074,37 @@ struct target_pollfd {
 #define TARGET_BLKSECTSET TARGET_IO(0x12,102)/* set max sectors per request (ll_rw_blk.c) */
 #define TARGET_BLKSECTGET TARGET_IO(0x12,103)/* get max sectors per request (ll_rw_blk.c) */
 #define TARGET_BLKSSZGET  TARGET_IO(0x12,104)/* get block device sector size */
+#define TARGET_BLKPG      TARGET_IO(0x12,105)/* Partition table and disk geometry handling */
 /* A jump here: 108-111 have been used for various private purposes. */
-#define TARGET_BLKBSZGET  TARGET_IOR(0x12,112,sizeof(int))
-#define TARGET_BLKBSZSET  TARGET_IOW(0x12,113,sizeof(int))
-#define TARGET_BLKGETSIZE64 TARGET_IOR(0x12,114,sizeof(uint64_t)) /* return device size in bytes (u64 *arg) */
+#define TARGET_BLKBSZGET  TARGET_IOR(0x12, 112, abi_ulong)
+#define TARGET_BLKBSZSET  TARGET_IOW(0x12, 113, abi_ulong)
+#define TARGET_BLKGETSIZE64 TARGET_IOR(0x12,114,abi_ulong)
+                                             /* return device size in bytes
+                                                (u64 *arg) */
+
+#define TARGET_BLKDISCARD TARGET_IO(0x12, 119)
+#define TARGET_BLKIOMIN TARGET_IO(0x12, 120)
+#define TARGET_BLKIOOPT TARGET_IO(0x12, 121)
+#define TARGET_BLKALIGNOFF TARGET_IO(0x12, 122)
+#define TARGET_BLKPBSZGET TARGET_IO(0x12, 123)
+#define TARGET_BLKDISCARDZEROES TARGET_IO(0x12, 124)
+#define TARGET_BLKSECDISCARD TARGET_IO(0x12, 125)
+#define TARGET_BLKROTATIONAL TARGET_IO(0x12, 126)
+#define TARGET_BLKZEROOUT TARGET_IO(0x12, 127)
+
 #define TARGET_FIBMAP     TARGET_IO(0x00,1)  /* bmap access */
 #define TARGET_FIGETBSZ   TARGET_IO(0x00,2)  /* get the block size used for bmap */
+
+#define TARGET_FICLONE    TARGET_IOW(0x94, 9, int)
+#define TARGET_FICLONERANGE TARGET_IOW(0x94, 13, struct file_clone_range)
+
+/* Note that the ioctl numbers claim type "long" but the actual type
+ * used by the kernel is "int".
+ */
+#define TARGET_FS_IOC_GETFLAGS TARGET_IOR('f', 1, long)
+#define TARGET_FS_IOC_SETFLAGS TARGET_IOW('f', 2, long)
+
+#define TARGET_FS_IOC_FIEMAP TARGET_IOWR('f',11,struct fiemap)
 
 /* cdrom commands */
 #define TARGET_CDROMPAUSE		0x5301 /* Pause Audio Operation */
@@ -774,8 +1134,8 @@ struct target_pollfd {
                                            (struct cdrom_multisession) */
 #define TARGET_CDROM_GET_MCN		0x5311 /* Obtain the "Universal Product Code"
                                            if available (struct cdrom_mcn) */
-#define TARGET_CDROM_GET_UPC		TARGET_CDROM_GET_MCN  /* This one is depricated,
-                                          but here anyway for compatability */
+#define TARGET_CDROM_GET_UPC		TARGET_CDROM_GET_MCN  /* This one is deprecated,
+                                          but here anyway for compatibility */
 #define TARGET_CDROMRESET		0x5312 /* hard-reset the drive */
 #define TARGET_CDROMVOLREAD		0x5313 /* Get the drive's volume setting
                                           (struct cdrom_volctrl) */
@@ -874,6 +1234,50 @@ struct target_pollfd {
 #define TARGET_LOOP_GET_STATUS64      0x4C05
 #define TARGET_LOOP_CHANGE_FD         0x4C06
 
+#define TARGET_LOOP_CTL_ADD           0x4C80
+#define TARGET_LOOP_CTL_REMOVE        0x4C81
+#define TARGET_LOOP_CTL_GET_FREE      0x4C82
+
+/* fb ioctls */
+#define TARGET_FBIOGET_VSCREENINFO    0x4600
+#define TARGET_FBIOPUT_VSCREENINFO    0x4601
+#define TARGET_FBIOGET_FSCREENINFO    0x4602
+#define TARGET_FBIOGETCMAP            0x4604
+#define TARGET_FBIOPUTCMAP            0x4605
+#define TARGET_FBIOPAN_DISPLAY        0x4606
+#define TARGET_FBIOGET_CON2FBMAP      0x460F
+#define TARGET_FBIOPUT_CON2FBMAP      0x4610
+
+/* vt ioctls */
+#define TARGET_VT_OPENQRY             0x5600
+#define TARGET_VT_GETSTATE            0x5603
+#define TARGET_VT_ACTIVATE            0x5606
+#define TARGET_VT_WAITACTIVE          0x5607
+#define TARGET_VT_LOCKSWITCH          0x560b
+#define TARGET_VT_UNLOCKSWITCH        0x560c
+#define TARGET_VT_GETMODE             0x5601
+#define TARGET_VT_SETMODE             0x5602
+#define TARGET_VT_RELDISP             0x5605
+#define TARGET_VT_DISALLOCATE         0x5608
+
+/* device mapper */
+#define TARGET_DM_VERSION             TARGET_IOWRU(0xfd, 0x00)
+#define TARGET_DM_REMOVE_ALL          TARGET_IOWRU(0xfd, 0x01)
+#define TARGET_DM_LIST_DEVICES        TARGET_IOWRU(0xfd, 0x02)
+#define TARGET_DM_DEV_CREATE          TARGET_IOWRU(0xfd, 0x03)
+#define TARGET_DM_DEV_REMOVE          TARGET_IOWRU(0xfd, 0x04)
+#define TARGET_DM_DEV_RENAME          TARGET_IOWRU(0xfd, 0x05)
+#define TARGET_DM_DEV_SUSPEND         TARGET_IOWRU(0xfd, 0x06)
+#define TARGET_DM_DEV_STATUS          TARGET_IOWRU(0xfd, 0x07)
+#define TARGET_DM_DEV_WAIT            TARGET_IOWRU(0xfd, 0x08)
+#define TARGET_DM_TABLE_LOAD          TARGET_IOWRU(0xfd, 0x09)
+#define TARGET_DM_TABLE_CLEAR         TARGET_IOWRU(0xfd, 0x0a)
+#define TARGET_DM_TABLE_DEPS          TARGET_IOWRU(0xfd, 0x0b)
+#define TARGET_DM_TABLE_STATUS        TARGET_IOWRU(0xfd, 0x0c)
+#define TARGET_DM_LIST_VERSIONS       TARGET_IOWRU(0xfd, 0x0d)
+#define TARGET_DM_TARGET_MSG          TARGET_IOWRU(0xfd, 0x0e)
+#define TARGET_DM_DEV_SET_GEOMETRY    TARGET_IOWRU(0xfd, 0x0f)
+
 /* from asm/termbits.h */
 
 #define TARGET_NCC 8
@@ -894,6 +1298,12 @@ struct target_winsize {
 };
 
 #include "termbits.h"
+
+#if defined(TARGET_MIPS)
+#define TARGET_PROT_SEM         0x10
+#else
+#define TARGET_PROT_SEM         0x08
+#endif
 
 /* Common */
 #define TARGET_MAP_SHARED	0x01		/* Share changes */
@@ -931,6 +1341,16 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x10000		/* no check for reservations */
 #define TARGET_MAP_POPULATE	0x20000		/* pop (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x40000		/* do not block on IO */
+#elif defined(TARGET_HPPA)
+#define TARGET_MAP_ANONYMOUS	0x10		/* don't use a file */
+#define TARGET_MAP_FIXED	0x04		/* Interpret addr exactly */
+#define TARGET_MAP_GROWSDOWN	0x08000		/* stack-like segment */
+#define TARGET_MAP_DENYWRITE	0x00800		/* ETXTBSY */
+#define TARGET_MAP_EXECUTABLE	0x01000		/* mark it as an executable */
+#define TARGET_MAP_LOCKED	0x02000		/* lock the mapping */
+#define TARGET_MAP_NORESERVE	0x04000		/* no check for reservations */
+#define TARGET_MAP_POPULATE	0x10000		/* pop (prefault) pagetables */
+#define TARGET_MAP_NONBLOCK	0x20000		/* do not block on IO */
 #else
 #define TARGET_MAP_FIXED	0x10		/* Interpret addr exactly */
 #define TARGET_MAP_ANONYMOUS	0x20		/* don't use a file */
@@ -941,9 +1361,12 @@ struct target_winsize {
 #define TARGET_MAP_NORESERVE	0x4000		/* don't check for reservations */
 #define TARGET_MAP_POPULATE	0x8000		/* populate (prefault) pagetables */
 #define TARGET_MAP_NONBLOCK	0x10000		/* do not block on IO */
+#define TARGET_MAP_UNINITIALIZED 0x4000000	/* for anonymous mmap, memory could be uninitialized */
 #endif
 
-#if (defined(TARGET_I386) && defined(TARGET_ABI32)) || defined(TARGET_ARM) || defined(TARGET_CRIS)
+#if (defined(TARGET_I386) && defined(TARGET_ABI32)) \
+    || (defined(TARGET_ARM) && defined(TARGET_ABI32)) \
+    || defined(TARGET_CRIS) || defined(TARGET_UNICORE32)
 struct target_stat {
 	unsigned short st_dev;
 	unsigned short __pad1;
@@ -970,6 +1393,7 @@ struct target_stat {
 /* This matches struct stat64 in glibc2.1, hence the absolutely
  * insane amounts of padding around dev_t's.
  */
+#define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
 	unsigned short	st_dev;
 	unsigned char	__pad0[10];
@@ -1002,9 +1426,10 @@ struct target_stat64 {
 	abi_ulong	__pad7;		/* will be high 32 bits of ctime someday */
 
 	unsigned long long	st_ino;
-} __attribute__((packed));
+} QEMU_PACKED;
 
 #ifdef TARGET_ARM
+#define TARGET_HAS_STRUCT_STAT64
 struct target_eabi_stat64 {
         unsigned long long st_dev;
         unsigned int    __pad1;
@@ -1033,7 +1458,7 @@ struct target_eabi_stat64 {
         abi_ulong    target_st_ctime_nsec;
 
         unsigned long long st_ino;
-} __attribute__ ((packed));
+} QEMU_PACKED;
 #endif
 
 #elif defined(TARGET_SPARC64) && !defined(TARGET_ABI32)
@@ -1054,6 +1479,7 @@ struct target_stat {
 	abi_ulong	__unused4[2];
 };
 
+#define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
 	unsigned char	__pad0[6];
 	unsigned short	st_dev;
@@ -1109,6 +1535,7 @@ struct target_stat {
 	abi_ulong	__unused4[2];
 };
 
+#define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
 	unsigned char	__pad0[6];
 	unsigned short	st_dev;
@@ -1176,7 +1603,9 @@ struct target_stat {
 #endif
 };
 
-struct __attribute__((__packed__)) target_stat64 {
+#if !defined(TARGET_PPC64) || defined(TARGET_ABI32)
+#define TARGET_HAS_STRUCT_STAT64
+struct QEMU_PACKED target_stat64 {
 	unsigned long long st_dev;
         unsigned long long st_ino;
 	unsigned int st_mode;
@@ -1187,8 +1616,8 @@ struct __attribute__((__packed__)) target_stat64 {
 	unsigned long long __pad0;
 	long long      st_size;
 	int	       st_blksize;
-	long long      st_blocks;	/* Number 512-byte blocks allocated. */
 	unsigned int   __pad1;
+	long long      st_blocks;	/* Number 512-byte blocks allocated. */
 	int	       target_st_atime;
         unsigned int   target_st_atime_nsec;
 	int	       target_st_mtime;
@@ -1198,6 +1627,7 @@ struct __attribute__((__packed__)) target_stat64 {
         unsigned int   __unused4;
         unsigned int   __unused5;
 };
+#endif
 
 #elif defined(TARGET_MICROBLAZE)
 
@@ -1223,9 +1653,13 @@ struct target_stat {
 };
 
 /* FIXME: Microblaze no-mmu user-space has a difference stat64 layout...  */
-struct __attribute__((__packed__)) target_stat64 {
+#define TARGET_HAS_STRUCT_STAT64
+struct QEMU_PACKED target_stat64 {
 	uint64_t st_dev;
-        uint64_t st_ino;
+#define TARGET_STAT64_HAS_BROKEN_ST_INO 1
+	uint32_t pad0;
+	uint32_t __st_ino;
+
 	uint32_t st_mode;
 	uint32_t st_nlink;
 	uint32_t st_uid;
@@ -1239,13 +1673,12 @@ struct __attribute__((__packed__)) target_stat64 {
 	int64_t st_blocks;	/* Number 512-byte blocks allocated. */
 
 	int	       target_st_atime;
-        unsigned int   target_st_atime_nsec;
+	unsigned int   target_st_atime_nsec;
 	int	       target_st_mtime;
-        unsigned int   target_st_mtime_nsec;
+	unsigned int   target_st_mtime_nsec;
 	int            target_st_ctime;
-        unsigned int   target_st_ctime_nsec;
-        uint32_t   __unused4;
-        uint32_t   __unused5;
+	unsigned int   target_st_ctime_nsec;
+	uint64_t st_ino;
 };
 
 #elif defined(TARGET_M68K)
@@ -1276,6 +1709,7 @@ struct target_stat {
 /* This matches struct stat64 in glibc2.1, hence the absolutely
  * insane amounts of padding around dev_t's.
  */
+#define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
 	unsigned long long	st_dev;
 	unsigned char	__pad1[2];
@@ -1308,7 +1742,7 @@ struct target_stat64 {
 	abi_ulong	target_st_ctime_nsec;
 
 	unsigned long long	st_ino;
-} __attribute__((packed));
+} QEMU_PACKED;
 
 #elif defined(TARGET_ABI_MIPSN64)
 
@@ -1352,72 +1786,25 @@ struct target_stat {
 #elif defined(TARGET_ABI_MIPSN32)
 
 struct target_stat {
-	unsigned	st_dev;
-	int		st_pad1[3];		/* Reserved for network id */
-	unsigned int	st_ino;
-	unsigned int	st_mode;
-	unsigned int	st_nlink;
-	int		st_uid;
-	int		st_gid;
-	unsigned 	st_rdev;
-	unsigned int	st_pad2[2];
-	unsigned int	st_size;
-	unsigned int	st_pad3;
-	/*
-	 * Actually this should be timestruc_t st_atime, st_mtime and st_ctime
-	 * but we don't have it under Linux.
-	 */
-	unsigned int		target_st_atime;
-	unsigned int		target_st_atime_nsec;
-	unsigned int		target_st_mtime;
-	unsigned int		target_st_mtime_nsec;
-	unsigned int		target_st_ctime;
-	unsigned int		target_st_ctime_nsec;
-	unsigned int		st_blksize;
-	unsigned int		st_blocks;
-	unsigned int		st_pad4[14];
-};
-
-/*
- * This matches struct stat64 in glibc2.1, hence the absolutely insane
- * amounts of padding around dev_t's.  The memory layout is the same as of
- * struct stat of the 64-bit kernel.
- */
-
-struct target_stat64 {
-	unsigned int	st_dev;
-	unsigned int	st_pad0[3];	/* Reserved for st_dev expansion  */
-
-	target_ulong	st_ino;
-
-        unsigned int	st_mode;
-        unsigned int	st_nlink;
-
-	int		st_uid;
-	int		st_gid;
-
-	unsigned int	st_rdev;
-	unsigned int	st_pad1[3];	/* Reserved for st_rdev expansion  */
-
-	int		st_size;
-
-	/*
-	 * Actually this should be timestruc_t st_atime, st_mtime and st_ctime
-	 * but we don't have it under Linux.
-	 */
-	int		target_st_atime;
-	unsigned int	target_st_atime_nsec;	/* Reserved for st_atime expansion  */
-
-	int		target_st_mtime;
-	unsigned int	target_st_mtime_nsec;	/* Reserved for st_mtime expansion  */
-
-	int		target_st_ctime;
-	unsigned int	target_st_ctime_nsec;	/* Reserved for st_ctime expansion  */
-
-	unsigned int	st_blksize;
-	unsigned int	st_pad2;
-
-	int		st_blocks;
+        abi_ulong    st_dev;
+        abi_ulong    st_pad0[3]; /* Reserved for st_dev expansion */
+        uint64_t     st_ino;
+        unsigned int st_mode;
+        unsigned int st_nlink;
+        int          st_uid;
+        int          st_gid;
+        abi_ulong    st_rdev;
+        abi_ulong    st_pad1[3]; /* Reserved for st_rdev expansion */
+        int64_t      st_size;
+        abi_long     target_st_atime;
+        abi_ulong    target_st_atime_nsec; /* Reserved for st_atime expansion */
+        abi_long     target_st_mtime;
+        abi_ulong    target_st_mtime_nsec; /* Reserved for st_mtime expansion */
+        abi_long     target_st_ctime;
+        abi_ulong    target_st_ctime_nsec; /* Reserved for st_ctime expansion */
+        abi_ulong    st_blksize;
+        abi_ulong    st_pad2;
+        int64_t      st_blocks;
 };
 
 #elif defined(TARGET_ABI_MIPSO32)
@@ -1455,6 +1842,7 @@ struct target_stat {
  * struct stat of the 64-bit kernel.
  */
 
+#define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
 	abi_ulong	st_dev;
 	abi_ulong	st_pad0[3];	/* Reserved for st_dev expansion  */
@@ -1511,6 +1899,7 @@ struct target_stat {
        unsigned int    st_gen;
 };
 
+#define TARGET_HAS_STRUCT_STAT64
 struct target_stat64 {
        abi_ulong    st_dev;
        abi_ulong    st_ino;
@@ -1560,7 +1949,8 @@ struct target_stat {
 /* This matches struct stat64 in glibc2.1, hence the absolutely
  * insane amounts of padding around dev_t's.
  */
-struct __attribute__((__packed__)) target_stat64 {
+#define TARGET_HAS_STRUCT_STAT64
+struct QEMU_PACKED target_stat64 {
 	unsigned long long	st_dev;
 	unsigned char	__pad0[4];
 
@@ -1617,6 +2007,157 @@ struct target_stat {
 
   	abi_long	__unused[3];
 };
+#elif defined(TARGET_S390X)
+struct target_stat {
+    abi_ulong  st_dev;
+    abi_ulong  st_ino;
+    abi_ulong  st_nlink;
+    unsigned int   st_mode;
+    unsigned int   st_uid;
+    unsigned int   st_gid;
+    unsigned int   __pad1;
+    abi_ulong  st_rdev;
+    abi_ulong  st_size;
+    abi_ulong  target_st_atime;
+    abi_ulong  target_st_atime_nsec;
+    abi_ulong  target_st_mtime;
+    abi_ulong  target_st_mtime_nsec;
+    abi_ulong  target_st_ctime;
+    abi_ulong  target_st_ctime_nsec;
+    abi_ulong  st_blksize;
+    abi_long       st_blocks;
+    abi_ulong  __unused[3];
+};
+#elif defined(TARGET_AARCH64)
+struct target_stat {
+    abi_ulong  st_dev;
+    abi_ulong  st_ino;
+    unsigned int st_mode;
+    unsigned int st_nlink;
+    unsigned int   st_uid;
+    unsigned int   st_gid;
+    abi_ulong  st_rdev;
+    abi_ulong  _pad1;
+    abi_long  st_size;
+    int        st_blksize;
+    int        __pad2;
+    abi_long   st_blocks;
+    abi_long  target_st_atime;
+    abi_ulong  target_st_atime_nsec;
+    abi_long  target_st_mtime;
+    abi_ulong  target_st_mtime_nsec;
+    abi_long  target_st_ctime;
+    abi_ulong  target_st_ctime_nsec;
+    unsigned int __unused[2];
+};
+#elif defined(TARGET_OPENRISC) || defined(TARGET_TILEGX) || \
+      defined(TARGET_NIOS2)
+
+/* These are the asm-generic versions of the stat and stat64 structures */
+
+struct target_stat {
+    abi_ulong st_dev;
+    abi_ulong st_ino;
+    unsigned int st_mode;
+    unsigned int st_nlink;
+    unsigned int st_uid;
+    unsigned int st_gid;
+    abi_ulong st_rdev;
+    abi_ulong __pad1;
+    abi_long st_size;
+    int st_blksize;
+    int __pad2;
+    abi_long st_blocks;
+    abi_long target_st_atime;
+    abi_ulong target_st_atime_nsec;
+    abi_long target_st_mtime;
+    abi_ulong target_st_mtime_nsec;
+    abi_long target_st_ctime;
+    abi_ulong target_st_ctime_nsec;
+    unsigned int __unused4;
+    unsigned int __unused5;
+};
+
+#define TARGET_HAS_STRUCT_STAT64
+struct target_stat64 {
+    uint64_t st_dev;
+    uint64_t st_ino;
+    unsigned int st_mode;
+    unsigned int st_nlink;
+    unsigned int st_uid;
+    unsigned int st_gid;
+    uint64_t st_rdev;
+    uint64_t __pad1;
+    int64_t st_size;
+    int st_blksize;
+    int __pad2;
+    int64_t st_blocks;
+    int target_st_atime;
+    unsigned int target_st_atime_nsec;
+    int target_st_mtime;
+    unsigned int target_st_mtime_nsec;
+    int target_st_ctime;
+    unsigned int target_st_ctime_nsec;
+    unsigned int __unused4;
+    unsigned int __unused5;
+};
+
+#elif defined(TARGET_HPPA)
+
+struct target_stat {
+    abi_uint   st_dev;
+    abi_uint   st_ino;
+    abi_ushort st_mode;
+    abi_ushort st_nlink;
+    abi_ushort _res1;
+    abi_ushort _res2;
+    abi_uint   st_rdev;
+    abi_int    st_size;
+    abi_int    target_st_atime;
+    abi_uint   target_st_atime_nsec;
+    abi_int    target_st_mtime;
+    abi_uint   target_st_mtime_nsec;
+    abi_int    target_st_ctime;
+    abi_uint   target_st_ctime_nsec;
+    abi_int    st_blksize;
+    abi_int    st_blocks;
+    abi_uint   _unused1;
+    abi_uint   _unused2;
+    abi_uint   _unused3;
+    abi_uint   _unused4;
+    abi_ushort _unused5;
+    abi_short  st_fstype;
+    abi_uint   st_realdev;
+    abi_ushort st_basemode;
+    abi_ushort _unused6;
+    abi_uint   st_uid;
+    abi_uint   st_gid;
+    abi_uint   _unused7[3];
+};
+
+#define TARGET_HAS_STRUCT_STAT64
+struct target_stat64 {
+    uint64_t   st_dev;
+    abi_uint   _pad1;
+    abi_uint   _res1;
+    abi_uint   st_mode;
+    abi_uint   st_nlink;
+    abi_uint   st_uid;
+    abi_uint   st_gid;
+    uint64_t   st_rdev;
+    abi_uint   _pad2;
+    int64_t    st_size;
+    abi_int    st_blksize;
+    int64_t    st_blocks;
+    abi_int    target_st_atime;
+    abi_uint   target_st_atime_nsec;
+    abi_int    target_st_mtime;
+    abi_uint   target_st_mtime_nsec;
+    abi_int    target_st_ctime;
+    abi_uint   target_st_ctime_nsec;
+    uint64_t   st_ino;
+};
+
 #else
 #error unsupported CPU
 #endif
@@ -1675,7 +2216,8 @@ struct target_statfs64 {
 	uint32_t	f_spare[6];
 };
 #elif (defined(TARGET_PPC64) || defined(TARGET_X86_64) || \
-       defined(TARGET_SPARC64)) && !defined(TARGET_ABI32)
+       defined(TARGET_SPARC64) || defined(TARGET_AARCH64)) && \
+       !defined(TARGET_ABI32)
 struct target_statfs {
 	abi_long f_type;
 	abi_long f_bsize;
@@ -1702,6 +2244,34 @@ struct target_statfs64 {
 	abi_long f_namelen;
 	abi_long f_frsize;
 	abi_long f_spare[5];
+};
+#elif defined(TARGET_S390X)
+struct target_statfs {
+    int32_t  f_type;
+    int32_t  f_bsize;
+    abi_long f_blocks;
+    abi_long f_bfree;
+    abi_long f_bavail;
+    abi_long f_files;
+    abi_long f_ffree;
+    kernel_fsid_t f_fsid;
+    int32_t  f_namelen;
+    int32_t  f_frsize;
+    int32_t  f_spare[5];
+};
+
+struct target_statfs64 {
+    int32_t  f_type;
+    int32_t  f_bsize;
+    abi_long f_blocks;
+    abi_long f_bfree;
+    abi_long f_bavail;
+    abi_long f_files;
+    abi_long f_ffree;
+    kernel_fsid_t f_fsid;
+    int32_t  f_namelen;
+    int32_t  f_frsize;
+    int32_t  f_spare[5];
 };
 #else
 struct target_statfs {
@@ -1746,12 +2316,24 @@ struct target_statfs64 {
 #define TARGET_F_SETLKW        9
 #define TARGET_F_SETOWN        5       /*  for sockets. */
 #define TARGET_F_GETOWN        6       /*  for sockets. */
+
+#define TARGET_F_RDLCK         1
+#define TARGET_F_WRLCK         2
+#define TARGET_F_UNLCK         8
+#define TARGET_F_EXLCK         16
+#define TARGET_F_SHLCK         32
 #elif defined(TARGET_MIPS)
 #define TARGET_F_GETLK         14
 #define TARGET_F_SETLK         6
 #define TARGET_F_SETLKW        7
 #define TARGET_F_SETOWN        24       /*  for sockets. */
-#define TARGET_F_GETOWN        25       /*  for sockets. */
+#define TARGET_F_GETOWN        23       /*  for sockets. */
+#elif defined(TARGET_HPPA)
+#define TARGET_F_GETLK         5
+#define TARGET_F_SETLK         6
+#define TARGET_F_SETLKW        7
+#define TARGET_F_GETOWN        11       /*  for sockets. */
+#define TARGET_F_SETOWN        12       /*  for sockets. */
 #else
 #define TARGET_F_GETLK         5
 #define TARGET_F_SETLK         6
@@ -1759,181 +2341,230 @@ struct target_statfs64 {
 #define TARGET_F_SETOWN        8       /*  for sockets. */
 #define TARGET_F_GETOWN        9       /*  for sockets. */
 #endif
+#define TARGET_F_SETOWN_EX     15
+#define TARGET_F_GETOWN_EX     16
 
+#ifndef TARGET_F_RDLCK
+#define TARGET_F_RDLCK         0
+#define TARGET_F_WRLCK         1
+#define TARGET_F_UNLCK         2
+#endif
+
+#ifndef TARGET_F_EXLCK
+#define TARGET_F_EXLCK         4
+#define TARGET_F_SHLCK         8
+#endif
+
+
+#if defined(TARGET_HPPA)
+#define TARGET_F_SETSIG        13      /*  for sockets. */
+#define TARGET_F_GETSIG        14      /*  for sockets. */
+#else
 #define TARGET_F_SETSIG        10      /*  for sockets. */
 #define TARGET_F_GETSIG        11      /*  for sockets. */
+#endif
 
 #if defined(TARGET_MIPS)
 #define TARGET_F_GETLK64       33      /*  using 'struct flock64' */
 #define TARGET_F_SETLK64       34
 #define TARGET_F_SETLKW64      35
+#elif defined(TARGET_HPPA)
+#define TARGET_F_GETLK64       8       /*  using 'struct flock64' */
+#define TARGET_F_SETLK64       9
+#define TARGET_F_SETLKW64      10
 #else
 #define TARGET_F_GETLK64       12      /*  using 'struct flock64' */
 #define TARGET_F_SETLK64       13
 #define TARGET_F_SETLKW64      14
 #endif
-#if defined (TARGET_ARM)
-#define TARGET_O_ACCMODE          0003
-#define TARGET_O_RDONLY             00
-#define TARGET_O_WRONLY             01
-#define TARGET_O_RDWR               02
-#define TARGET_O_CREAT            0100 /* not fcntl */
-#define TARGET_O_EXCL             0200 /* not fcntl */
-#define TARGET_O_NOCTTY           0400 /* not fcntl */
-#define TARGET_O_TRUNC           01000 /* not fcntl */
-#define TARGET_O_APPEND          02000
-#define TARGET_O_NONBLOCK        04000
-#define TARGET_O_NDELAY        TARGET_O_NONBLOCK
-#define TARGET_O_SYNC           010000
-#define TARGET_FASYNC           020000 /* fcntl, for BSD compatibility */
+
+#define TARGET_F_LINUX_SPECIFIC_BASE 1024
+#define TARGET_F_SETLEASE (TARGET_F_LINUX_SPECIFIC_BASE + 0)
+#define TARGET_F_GETLEASE (TARGET_F_LINUX_SPECIFIC_BASE + 1)
+#define TARGET_F_DUPFD_CLOEXEC (TARGET_F_LINUX_SPECIFIC_BASE + 6)
+#define TARGET_F_SETPIPE_SZ (TARGET_F_LINUX_SPECIFIC_BASE + 7)
+#define TARGET_F_GETPIPE_SZ (TARGET_F_LINUX_SPECIFIC_BASE + 8)
+#define TARGET_F_NOTIFY  (TARGET_F_LINUX_SPECIFIC_BASE+2)
+
+#if defined(TARGET_ALPHA)
+#define TARGET_O_NONBLOCK           04
+#define TARGET_O_APPEND            010
+#define TARGET_O_CREAT           01000 /* not fcntl */
+#define TARGET_O_TRUNC           02000 /* not fcntl */
+#define TARGET_O_EXCL            04000 /* not fcntl */
+#define TARGET_O_NOCTTY         010000 /* not fcntl */
+#define TARGET_O_DSYNC          040000
+#define TARGET_O_LARGEFILE           0 /* not necessary, always 64-bit */
+#define TARGET_O_DIRECTORY     0100000 /* must be a directory */
+#define TARGET_O_NOFOLLOW      0200000 /* don't follow links */
+#define TARGET_O_DIRECT       02000000 /* direct disk access hint */
+#define TARGET_O_NOATIME      04000000
+#define TARGET_O_CLOEXEC     010000000
+#define TARGET___O_SYNC      020000000
+#define TARGET_O_PATH        040000000
+#elif defined(TARGET_HPPA)
+#define TARGET_O_NONBLOCK    000200004 /* HPUX has separate NDELAY & NONBLOCK */
+#define TARGET_O_APPEND      000000010
+#define TARGET_O_CREAT       000000400 /* not fcntl */
+#define TARGET_O_EXCL        000002000 /* not fcntl */
+#define TARGET_O_NOCTTY      000400000 /* not fcntl */
+#define TARGET_O_DSYNC       001000000
+#define TARGET_O_LARGEFILE   000004000
+#define TARGET_O_DIRECTORY   000010000 /* must be a directory */
+#define TARGET_O_NOFOLLOW    000000200 /* don't follow links */
+#define TARGET_O_NOATIME     004000000
+#define TARGET_O_CLOEXEC     010000000
+#define TARGET___O_SYNC      000100000
+#define TARGET_O_PATH        020000000
+#elif defined(TARGET_ARM) || defined(TARGET_M68K)
 #define TARGET_O_DIRECTORY      040000 /* must be a directory */
 #define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
 #define TARGET_O_DIRECT        0200000 /* direct disk access hint */
 #define TARGET_O_LARGEFILE     0400000
+#elif defined(TARGET_MIPS)
+#define TARGET_O_APPEND         0x0008
+#define TARGET_O_DSYNC          0x0010
+#define TARGET_O_NONBLOCK       0x0080
+#define TARGET_O_CREAT          0x0100  /* not fcntl */
+#define TARGET_O_TRUNC          0x0200  /* not fcntl */
+#define TARGET_O_EXCL           0x0400  /* not fcntl */
+#define TARGET_O_NOCTTY         0x0800  /* not fcntl */
+#define TARGET_FASYNC           0x1000  /* fcntl, for BSD compatibility */
+#define TARGET_O_LARGEFILE      0x2000  /* allow large file opens */
+#define TARGET___O_SYNC         0x4000
+#define TARGET_O_DIRECT         0x8000  /* direct disk access hint */
 #elif defined (TARGET_PPC)
-#define TARGET_O_ACCMODE          0003
-#define TARGET_O_RDONLY             00
-#define TARGET_O_WRONLY             01
-#define TARGET_O_RDWR               02
-#define TARGET_O_CREAT            0100 /* not fcntl */
-#define TARGET_O_EXCL             0200 /* not fcntl */
-#define TARGET_O_NOCTTY           0400 /* not fcntl */
-#define TARGET_O_TRUNC           01000 /* not fcntl */
-#define TARGET_O_APPEND          02000
-#define TARGET_O_NONBLOCK        04000
-#define TARGET_O_NDELAY        TARGET_O_NONBLOCK
-#define TARGET_O_SYNC           010000
-#define TARGET_FASYNC           020000 /* fcntl, for BSD compatibility */
-#define TARGET_O_DIRECTORY      040000 /* must be a directory */
-#define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
-#define TARGET_O_LARGEFILE     0200000
-#define TARGET_O_DIRECT        0400000 /* direct disk access hint */
-#elif defined (TARGET_MICROBLAZE)
-#define TARGET_O_ACCMODE          0003
-#define TARGET_O_RDONLY             00
-#define TARGET_O_WRONLY             01
-#define TARGET_O_RDWR               02
-#define TARGET_O_CREAT            0100 /* not fcntl */
-#define TARGET_O_EXCL             0200 /* not fcntl */
-#define TARGET_O_NOCTTY           0400 /* not fcntl */
-#define TARGET_O_TRUNC           01000 /* not fcntl */
-#define TARGET_O_APPEND          02000
-#define TARGET_O_NONBLOCK        04000
-#define TARGET_O_NDELAY        TARGET_O_NONBLOCK
-#define TARGET_O_SYNC           010000
-#define TARGET_FASYNC           020000 /* fcntl, for BSD compatibility */
 #define TARGET_O_DIRECTORY      040000 /* must be a directory */
 #define TARGET_O_NOFOLLOW      0100000 /* don't follow links */
 #define TARGET_O_LARGEFILE     0200000
 #define TARGET_O_DIRECT        0400000 /* direct disk access hint */
 #elif defined (TARGET_SPARC)
-#define TARGET_O_RDONLY        0x0000
-#define TARGET_O_WRONLY        0x0001
-#define TARGET_O_RDWR          0x0002
-#define TARGET_O_ACCMODE       0x0003
-#define TARGET_O_APPEND        0x0008
-#define TARGET_FASYNC          0x0040  /* fcntl, for BSD compatibility */
-#define TARGET_O_CREAT         0x0200  /* not fcntl */
-#define TARGET_O_TRUNC         0x0400  /* not fcntl */
-#define TARGET_O_EXCL          0x0800  /* not fcntl */
-#define TARGET_O_SYNC          0x2000
-#define TARGET_O_NONBLOCK      0x4000
-#define TARGET_O_NDELAY        (0x0004 | TARGET_O_NONBLOCK)
-#define TARGET_O_NOCTTY        0x8000  /* not fcntl */
-#define TARGET_O_DIRECTORY     0x10000 /* must be a directory */
-#define TARGET_O_NOFOLLOW      0x20000 /* don't follow links */
+#define TARGET_O_APPEND         0x0008
+#define TARGET_FASYNC           0x0040  /* fcntl, for BSD compatibility */
+#define TARGET_O_CREAT          0x0200  /* not fcntl */
+#define TARGET_O_TRUNC          0x0400  /* not fcntl */
+#define TARGET_O_EXCL           0x0800  /* not fcntl */
+#define TARGET_O_DSYNC          0x2000
+#define TARGET_O_NONBLOCK       0x4000
+# ifdef TARGET_SPARC64
+#  define TARGET_O_NDELAY       0x0004
+# else
+#  define TARGET_O_NDELAY       (0x0004 | TARGET_O_NONBLOCK)
+# endif
+#define TARGET_O_NOCTTY         0x8000  /* not fcntl */
 #define TARGET_O_LARGEFILE     0x40000
-#define TARGET_O_DIRECT        0x100000 /* direct disk access hint */
-#elif defined(TARGET_MIPS)
-#define TARGET_O_ACCMODE	0x0003
-#define TARGET_O_RDONLY	0x0000
-#define TARGET_O_WRONLY	0x0001
-#define TARGET_O_RDWR		0x0002
-#define TARGET_O_APPEND	0x0008
-#define TARGET_O_SYNC		0x0010
-#define TARGET_O_NONBLOCK	0x0080
-#define TARGET_O_CREAT         0x0100	/* not fcntl */
-#define TARGET_O_TRUNC		0x0200	/* not fcntl */
-#define TARGET_O_EXCL		0x0400	/* not fcntl */
-#define TARGET_O_NOCTTY	0x0800	/* not fcntl */
-#define TARGET_FASYNC		0x1000	/* fcntl, for BSD compatibility */
-#define TARGET_O_LARGEFILE	0x2000	/* allow large file opens */
-#define TARGET_O_DIRECT	0x8000	/* direct disk access hint */
-#define TARGET_O_DIRECTORY	0x10000	/* must be a directory */
-#define TARGET_O_NOFOLLOW	0x20000	/* don't follow links */
-#define TARGET_O_NOATIME	0x40000
-#define TARGET_O_NDELAY	TARGET_O_NONBLOCK
-#elif defined(TARGET_ALPHA)
-#define TARGET_O_ACCMODE	0x0003
-#define TARGET_O_RDONLY	0x0000
-#define TARGET_O_WRONLY	0x0001
-#define TARGET_O_RDWR		0x0002
-#define TARGET_O_APPEND	0x0008
-#define TARGET_O_SYNC		0x4000
-#define TARGET_O_NONBLOCK	0x0004
-#define TARGET_O_CREAT         0x0200	/* not fcntl */
-#define TARGET_O_TRUNC		0x0400	/* not fcntl */
-#define TARGET_O_EXCL		0x0800	/* not fcntl */
-#define TARGET_O_NOCTTY	0x1000	/* not fcntl */
-#define TARGET_FASYNC		0x2000	/* fcntl, for BSD compatibility */
-#define TARGET_O_LARGEFILE	0x0000	/* not necessary, always 64-bit */
-#define TARGET_O_DIRECT	0x80000	/* direct disk access hint */
-#define TARGET_O_DIRECTORY	0x8000	/* must be a directory */
-#define TARGET_O_NOFOLLOW	0x10000	/* don't follow links */
-#define TARGET_O_NOATIME	0x100000
-#define TARGET_O_NDELAY	TARGET_O_NONBLOCK
-#else
+#define TARGET_O_DIRECT       0x100000  /* direct disk access hint */
+#define TARGET_O_NOATIME      0x200000
+#define TARGET_O_CLOEXEC      0x400000
+#define TARGET___O_SYNC       0x800000
+#define TARGET_O_PATH        0x1000000
+#endif
+
+/* <asm-generic/fcntl.h> values follow.  */
 #define TARGET_O_ACCMODE          0003
 #define TARGET_O_RDONLY             00
 #define TARGET_O_WRONLY             01
 #define TARGET_O_RDWR               02
+#ifndef TARGET_O_CREAT
 #define TARGET_O_CREAT            0100 /* not fcntl */
+#endif
+#ifndef TARGET_O_EXCL
 #define TARGET_O_EXCL             0200 /* not fcntl */
+#endif
+#ifndef TARGET_O_NOCTTY
 #define TARGET_O_NOCTTY           0400 /* not fcntl */
+#endif
+#ifndef TARGET_O_TRUNC
 #define TARGET_O_TRUNC           01000 /* not fcntl */
+#endif
+#ifndef TARGET_O_APPEND
 #define TARGET_O_APPEND          02000
+#endif
+#ifndef TARGET_O_NONBLOCK
 #define TARGET_O_NONBLOCK        04000
-#define TARGET_O_NDELAY        TARGET_O_NONBLOCK
-#define TARGET_O_SYNC           010000
+#endif
+#ifndef TARGET_O_DSYNC
+#define TARGET_O_DSYNC          010000
+#endif
+#ifndef TARGET_FASYNC
 #define TARGET_FASYNC           020000 /* fcntl, for BSD compatibility */
+#endif
+#ifndef TARGET_O_DIRECT
 #define TARGET_O_DIRECT         040000 /* direct disk access hint */
+#endif
+#ifndef TARGET_O_LARGEFILE
 #define TARGET_O_LARGEFILE     0100000
+#endif
+#ifndef TARGET_O_DIRECTORY
 #define TARGET_O_DIRECTORY     0200000 /* must be a directory */
+#endif
+#ifndef TARGET_O_NOFOLLOW
 #define TARGET_O_NOFOLLOW      0400000 /* don't follow links */
+#endif
+#ifndef TARGET_O_NOATIME
+#define TARGET_O_NOATIME      01000000
+#endif
+#ifndef TARGET_O_CLOEXEC
+#define TARGET_O_CLOEXEC      02000000
+#endif
+#ifndef TARGET___O_SYNC
+#define TARGET___O_SYNC       04000000
+#endif
+#ifndef TARGET_O_PATH
+#define TARGET_O_PATH        010000000
+#endif
+#ifndef TARGET_O_NDELAY
+#define TARGET_O_NDELAY  TARGET_O_NONBLOCK
+#endif
+#ifndef TARGET_O_SYNC
+#define TARGET_O_SYNC    (TARGET___O_SYNC | TARGET_O_DSYNC)
 #endif
 
 struct target_flock {
-	short l_type;
-	short l_whence;
-	abi_ulong l_start;
-	abi_ulong l_len;
-	int l_pid;
+    short l_type;
+    short l_whence;
+    abi_long l_start;
+    abi_long l_len;
+#if defined(TARGET_MIPS)
+    abi_long l_sysid;
+#endif
+    int l_pid;
+#if defined(TARGET_MIPS)
+    abi_long pad[4];
+#endif
 };
 
 struct target_flock64 {
-	short  l_type;
-	short  l_whence;
-#if defined(TARGET_PPC) || defined(TARGET_X86_64) || defined(TARGET_MIPS) || defined(TARGET_SPARC) || defined(TARGET_HPPA) || defined (TARGET_MICROBLAZE)
-        int __pad;
+    short  l_type;
+    short  l_whence;
+#if defined(TARGET_PPC) || defined(TARGET_X86_64) || defined(TARGET_MIPS) \
+    || defined(TARGET_SPARC) || defined(TARGET_HPPA) \
+    || defined(TARGET_MICROBLAZE) || defined(TARGET_TILEGX)
+    int __pad;
 #endif
-	unsigned long long l_start;
-	unsigned long long l_len;
-	int  l_pid;
-}__attribute__((packed));
+    abi_llong l_start;
+    abi_llong l_len;
+    int  l_pid;
+} QEMU_PACKED;
 
 #ifdef TARGET_ARM
 struct target_eabi_flock64 {
-	short  l_type;
-	short  l_whence;
-        int __pad;
-	unsigned long long l_start;
-	unsigned long long l_len;
-	int  l_pid;
-}__attribute__((packed));
+    short  l_type;
+    short  l_whence;
+    int __pad;
+    abi_llong l_start;
+    abi_llong l_len;
+    int  l_pid;
+} QEMU_PACKED;
 #endif
 
+struct target_f_owner_ex {
+        int type;	/* Owner type of ID.  */
+        int pid;	/* ID of owner.  */
+};
+
 /* soundcard defines */
-/* XXX: convert them all to arch indepedent entries */
+/* XXX: convert them all to arch independent entries */
 #define TARGET_SNDCTL_COPR_HALT           TARGET_IOWR('C',  7, int);
 #define TARGET_SNDCTL_COPR_LOAD           0xcfb04301
 #define TARGET_SNDCTL_COPR_RCODE          0xc0144303
@@ -1962,8 +2593,8 @@ struct target_eabi_flock64 {
 #define TARGET_SNDCTL_DSP_GETTRIGGER      TARGET_IOR('P',16, int)
 #define TARGET_SNDCTL_DSP_GETIPTR         TARGET_IORU('P',17)
 #define TARGET_SNDCTL_DSP_GETOPTR         TARGET_IORU('P',18)
-#define TARGET_SNDCTL_DSP_MAPINBUF        0x80085013
-#define TARGET_SNDCTL_DSP_MAPOUTBUF       0x80085014
+#define TARGET_SNDCTL_DSP_MAPINBUF        TARGET_IORU('P', 19)
+#define TARGET_SNDCTL_DSP_MAPOUTBUF       TARGET_IORU('P', 20)
 #define TARGET_SNDCTL_DSP_NONBLOCK        0x0000500e
 #define TARGET_SNDCTL_DSP_SAMPLESIZE      0xc0045005
 #define TARGET_SNDCTL_DSP_SETDUPLEX       0x00005016
@@ -2138,3 +2769,108 @@ struct target_mq_attr {
 #define FUTEX_CLOCK_REALTIME    256
 #define FUTEX_CMD_MASK          ~(FUTEX_PRIVATE_FLAG | FUTEX_CLOCK_REALTIME)
 
+#ifdef CONFIG_EPOLL
+#if defined(TARGET_X86_64)
+#define TARGET_EPOLL_PACKED QEMU_PACKED
+#else
+#define TARGET_EPOLL_PACKED
+#endif
+
+typedef union target_epoll_data {
+    abi_ulong ptr;
+    abi_int fd;
+    abi_uint u32;
+    abi_ullong u64;
+} target_epoll_data_t;
+
+struct target_epoll_event {
+    abi_uint events;
+    target_epoll_data_t data;
+} TARGET_EPOLL_PACKED;
+
+#define TARGET_EP_MAX_EVENTS (INT_MAX / sizeof(struct target_epoll_event))
+
+#endif
+struct target_rlimit64 {
+    uint64_t rlim_cur;
+    uint64_t rlim_max;
+};
+
+struct target_ucred {
+    uint32_t pid;
+    uint32_t uid;
+    uint32_t gid;
+};
+
+typedef int32_t target_timer_t;
+
+#define TARGET_SIGEV_MAX_SIZE 64
+
+/* This is architecture-specific but most architectures use the default */
+#ifdef TARGET_MIPS
+#define TARGET_SIGEV_PREAMBLE_SIZE (sizeof(int32_t) * 2 + sizeof(abi_long))
+#else
+#define TARGET_SIGEV_PREAMBLE_SIZE (sizeof(int32_t) * 2 \
+                                    + sizeof(target_sigval_t))
+#endif
+
+#define TARGET_SIGEV_PAD_SIZE ((TARGET_SIGEV_MAX_SIZE \
+                                - TARGET_SIGEV_PREAMBLE_SIZE) \
+                               / sizeof(int32_t))
+
+struct target_sigevent {
+    target_sigval_t sigev_value;
+    abi_int sigev_signo;
+    abi_int sigev_notify;
+    union {
+        abi_int _pad[TARGET_SIGEV_PAD_SIZE];
+        abi_int _tid;
+
+        /* The kernel (and thus QEMU) never looks at these;
+         * they're only used as part of the ABI between a
+         * userspace program and libc.
+         */
+        struct {
+            abi_ulong _function;
+            abi_ulong _attribute;
+        } _sigev_thread;
+    } _sigev_un;
+};
+
+struct target_user_cap_header {
+    uint32_t version;
+    int pid;
+};
+
+struct target_user_cap_data {
+    uint32_t effective;
+    uint32_t permitted;
+    uint32_t inheritable;
+};
+
+/* from kernel's include/linux/syslog.h */
+
+/* Close the log.  Currently a NOP. */
+#define TARGET_SYSLOG_ACTION_CLOSE          0
+/* Open the log. Currently a NOP. */
+#define TARGET_SYSLOG_ACTION_OPEN           1
+/* Read from the log. */
+#define TARGET_SYSLOG_ACTION_READ           2
+/* Read all messages remaining in the ring buffer. */
+#define TARGET_SYSLOG_ACTION_READ_ALL       3
+/* Read and clear all messages remaining in the ring buffer */
+#define TARGET_SYSLOG_ACTION_READ_CLEAR     4
+/* Clear ring buffer. */
+#define TARGET_SYSLOG_ACTION_CLEAR          5
+/* Disable printk's to console */
+#define TARGET_SYSLOG_ACTION_CONSOLE_OFF    6
+/* Enable printk's to console */
+#define TARGET_SYSLOG_ACTION_CONSOLE_ON     7
+/* Set level of messages printed to console */
+#define TARGET_SYSLOG_ACTION_CONSOLE_LEVEL  8
+/* Return number of unread characters in the log buffer */
+#define TARGET_SYSLOG_ACTION_SIZE_UNREAD    9
+/* Return size of the log buffer */
+#define TARGET_SYSLOG_ACTION_SIZE_BUFFER   10
+
+#endif

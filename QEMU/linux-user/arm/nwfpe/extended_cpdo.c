@@ -15,12 +15,12 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+    along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "qemu/osdep.h"
 #include "fpa11.h"
-#include "softfloat.h"
+#include "fpu/softfloat.h"
 #include "fpopcode.h"
 
 floatx80 floatx80_exp(floatx80 Fm);
