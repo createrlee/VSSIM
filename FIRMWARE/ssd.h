@@ -8,7 +8,8 @@
 #ifndef _SSD_H_
 #define _SSD_H_
 
-#include "hw.h"
+//#include "hw.h"
+typedef int int32_t;
 
 
 //FILE *fp;

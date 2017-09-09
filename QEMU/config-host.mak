@@ -18,7 +18,7 @@ extra_cflags=-m64 -mcx16
 extra_cxxflags=
 extra_ldflags=
 qemu_localedir=${prefix}/share/locale
-libs_softmmu=-L$(BUILD_DIR)/pixman/pixman/.libs -lpixman-1 -lutil  -lpng12   -ljpeg -lSDL   -lX11   -lgcrypt -lgnutls    
+libs_softmmu=-lpixman-1   -lutil -lncursesw    -lpng12   -ljpeg -lSDL   -lX11   -lgcrypt -lgnutls    
 ARCH=x86_64
 STRIP=strip
 CONFIG_POSIX=y
@@ -41,6 +41,7 @@ TARGET_DIRS=x86_64-softmmu
 CONFIG_SDL=y
 CONFIG_SDLABI=1.2
 SDL_CFLAGS=-D_GNU_SOURCE=1 -D_REENTRANT -I/usr/include/SDL    
+CONFIG_CURSES=y
 CONFIG_PIPE2=y
 CONFIG_ACCEPT4=y
 CONFIG_SPLICE=y
@@ -85,6 +86,8 @@ CONFIG_FDATASYNC=y
 CONFIG_MADVISE=y
 CONFIG_POSIX_MADVISE=y
 CONFIG_AVX2_OPT=y
+CONFIG_BZIP2=y
+BZIP2_LIBS=-lbz2
 CONFIG_QOM_CAST_DEBUG=y
 CONFIG_COROUTINE_BACKEND=ucontext
 CONFIG_COROUTINE_POOL=1
@@ -136,8 +139,8 @@ NM=nm
 WINDRES=windres
 CFLAGS=-O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2 -g 
 CFLAGS_NOPIE=
-QEMU_CFLAGS=-I$(SRC_PATH)/pixman/pixman -I$(BUILD_DIR)/pixman/pixman  -Werror -pthread -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include   -fPIE -DPIE -m64 -mcx16 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -Wstrict-prototypes -Wredundant-decls -Wall -Wundef -Wwrite-strings -Wmissing-prototypes -fno-strict-aliasing -fno-common -fwrapv  -Wendif-labels -Wno-missing-include-dirs -Wempty-body -Wnested-externs -Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers -Wold-style-declaration -Wold-style-definition -Wtype-limits -fstack-protector-all -I/usr/include/p11-kit-1     -I/usr/include/libpng12  
-QEMU_CXXFLAGS= -D__STDC_LIMIT_MACROS -Werror -pthread -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -fPIE -DPIE -m64 -mcx16 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -Wall -Wundef -Wwrite-strings -fno-strict-aliasing -fno-common -fwrapv -Wendif-labels -Wno-missing-include-dirs -Wempty-body -Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers -Wtype-limits -fstack-protector-all -I/usr/include/p11-kit-1 -I/usr/include/libpng12
+QEMU_CFLAGS=-I/usr/include/pixman-1    -pthread -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include   -DNCURSES_WIDECHAR -I/usr/include/ncursesw   -fPIE -DPIE -m64 -mcx16 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -Wstrict-prototypes -Wredundant-decls -Wall -Wundef -Wwrite-strings -Wmissing-prototypes -fno-strict-aliasing -fno-common -fwrapv  -Wendif-labels -Wno-missing-include-dirs -Wempty-body -Wnested-externs -Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers -Wold-style-declaration -Wold-style-definition -Wtype-limits -fstack-protector-all -I/usr/include/p11-kit-1     -I/usr/include/libpng12  
+QEMU_CXXFLAGS= -D__STDC_LIMIT_MACROS -pthread -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -DNCURSES_WIDECHAR -I/usr/include/ncursesw -fPIE -DPIE -m64 -mcx16 -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -Wall -Wundef -Wwrite-strings -fno-strict-aliasing -fno-common -fwrapv -Wendif-labels -Wno-missing-include-dirs -Wempty-body -Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers -Wtype-limits -fstack-protector-all -I/usr/include/p11-kit-1 -I/usr/include/libpng12
 QEMU_INCLUDES=-I$(SRC_PATH)/tcg -I$(SRC_PATH)/tcg/i386 -I$(SRC_PATH)/linux-headers -I/home/createrlee/Desktop/VSSIM/QEMU/linux-headers -I. -I$(SRC_PATH) -I$(SRC_PATH)/accel/tcg -I$(SRC_PATH)/include
 AUTOCONF_HOST := 
 LDFLAGS=-Wl,--warn-common -Wl,-z,relro -Wl,-z,now -pie -m64 -g 
@@ -156,4 +159,3 @@ TASN1_CFLAGS=
 POD2MAN=pod2man --utf8
 TRANSLATE_OPT_CFLAGS=
 CONFIG_VHOST_USER_NET_TEST_x86_64=y
-config-host.h: subdir-pixman

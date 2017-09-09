@@ -8,9 +8,7 @@
 #ifndef _TRIM_MANAGER_H_
 #define _TRIM_MANAGER_H_
 
-#ifndef VSSIM_BENCH
 #include "ssd_util.h"
-#endif
 
 typedef struct sector_entry
 {

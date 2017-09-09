@@ -11,7 +11,7 @@
 int SECTOR_SIZE;
 int PAGE_SIZE;
 
-int64_t SECTOR_NB;
+//int64_t SECTOR_NB;
 int PAGE_NB;
 int FLASH_NB;
 int BLOCK_NB;
@@ -20,21 +20,21 @@ int PLANES_PER_FLASH;
 
 int SECTORS_PER_PAGE;
 int PAGES_PER_FLASH;
-int64_t PAGES_IN_SSD;
+//int64_t PAGES_IN_SSD;
 
 int WAY_NB;
 int OVP;
 
 /* Mapping Table */
 int DATA_BLOCK_NB;
-int64_t BLOCK_MAPPING_ENTRY_NB;		
+//int64_t BLOCK_MAPPING_ENTRY_NB;		
 
 #ifdef PAGE_MAP
-int64_t PAGE_MAPPING_ENTRY_NB;
+//int64_t PAGE_MAPPING_ENTRY_NB;
 #endif
 
 #if defined PAGE_MAP || defined BLOCK_MAP
-int64_t EACH_EMPTY_TABLE_ENTRY_NB;
+//int64_t EACH_EMPTY_TABLE_ENTRY_NB;
 int EMPTY_TABLE_ENTRY_NB;
 int VICTIM_TABLE_ENTRY_NB;
 #endif

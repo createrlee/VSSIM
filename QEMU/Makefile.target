@@ -111,11 +111,11 @@ obj-$(CONFIG_LIBDECNUMBER) += libdecnumber/dpd/decimal128.o
 
 # For VSSIM support, you must add object file here.
 # ex). obj-i386-y = ftl.o
-obj-i386-y += hw/ide/vssim_config_manager.o
-obj-i386-y += hw/ide/ftl.o hw/ide/ftl_mapping_manager.o hw/ide/ftl_inverse_mapping_manager.o
-obj-i386-y += hw/ide/ftl_gc_manager.o hw/ide/ftl_perf_manager.o hw/ide/ftl_cache.o
-obj-i386-y += hw/ide/ssd.o hw/ide/ssd_trim_manager.o hw/ide/ssd_log_manager.o hw/ide/ssd_io_manager.o 
-obj-i386-y += hw/ide/firm_buffer_manager.o
+obj-y += hw/ide/vssim_config_manager.o
+obj-y += hw/ide/ftl.o hw/ide/ftl_mapping_manager.o hw/ide/ftl_inverse_mapping_manager.o
+obj-y += hw/ide/ftl_gc_manager.o hw/ide/ftl_perf_manager.o hw/ide/ftl_cache.o
+obj-y += hw/ide/ssd.o hw/ide/ssd_trim_manager.o hw/ide/ssd_log_manager.o hw/ide/ssd_io_manager.o 
+obj-y += hw/ide/firm_buffer_manager.o
 
 #########################################################
 # Linux user emulator target

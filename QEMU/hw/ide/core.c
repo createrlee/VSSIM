@@ -37,9 +37,8 @@
 
 #include "hw/ide/internal.h"
 
-#ifdef TARGET_I386
 #include "ssd.h"  //Include SSD Features
-#endif
+
 
 /* These values were based on a Seagate ST3500418AS but have been modified
    to make more sense in QEMU */
@@ -2730,10 +2729,9 @@ void ide_init2(IDEBus *bus, qemu_irq irq)
     }
     bus->irq = irq;
     bus->dma = &ide_dma_nop;
-    
-#ifdef TARGET_I386
+
     SSD_INIT();
-#endif
+
 }
 
 void ide_exit(IDEState *s)

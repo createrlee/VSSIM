@@ -7,7 +7,7 @@
 
 #include "common.h"
 #ifndef VSSIM_BENCH
-#include "qemu-kvm.h"
+//#include "pixman.h"
 #endif
 
 #ifdef FTL_GET_WRITE_WORKLOAD
