@@ -8,7 +8,7 @@
 #ifndef _SSD_UTIL_H_
 #define _SSD_UTIL_H_
 
-	typedef signed long long int64_t;
+	typedef long int int64_t;
 	#include <stdio.h>
 	#include <malloc.h>
 	#include <memory.h>

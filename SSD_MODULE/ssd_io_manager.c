@@ -8,7 +8,7 @@
 #include "common.h"
 
 #ifndef VSSIM_BENCH
-#include "qemu-kvm.h"
+//#include "qemu-kvm.h"
 #endif
 
 int* reg_io_cmd;	// READ, WRITE, ERASE
@@ -806,21 +806,21 @@ void SSD_UPDATE_QEMU_OVERHEAD(int64_t delay)
 	int p_num = FLASH_NB * PLANES_PER_FLASH;
 	int64_t diff = delay;
 
-	if(qemu_overhead == 0){
+	/*if(qemu_overhead == 0){
 		return;
 	}
 	else{
 		if(diff > qemu_overhead){
 			diff = qemu_overhead;
 		}
-	}
+	}*/
 
 	old_channel_time -= diff;
 	for(i=0;i<p_num;i++){
 		cell_io_time[i] -= diff;
 		reg_io_time[i] -= diff;
 	}
-	qemu_overhead -= diff;
+	//qemu_overhead -= diff;
 }
 #endif
 
