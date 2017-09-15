@@ -5,9 +5,6 @@
 // Hanyang University, Seoul, Korea
 // Embedded Software Systems Laboratory. All right reserved
 
-#ifndef _CONFIG_MANAGER_H_
-#define _CONFIG_MANAGER_H_
-
 #include "common.h"
 
 
@@ -33,17 +30,12 @@ extern int OVP;
 extern int DATA_BLOCK_NB;
 extern int64_t BLOCK_MAPPING_ENTRY_NB;
 
-#ifdef PAGE_MAP
 extern int64_t PAGE_MAPPING_ENTRY_NB;
-#endif
 
-#if defined PAGE_MAP || defined BLOCK_MAP
 extern int64_t EACH_EMPTY_TABLE_ENTRY_NB;
 extern int EMPTY_TABLE_ENTRY_NB;
 extern int VICTIM_TABLE_ENTRY_NB;
-#endif
 
-#if defined FAST_FTL || defined LAST_FTL
 extern int LOG_RAND_BLOCK_NB;
 extern int LOG_SEQ_BLOCK_NB;
 
@@ -54,15 +46,12 @@ extern int64_t RAN_LOG_MAPPING_ENTRY_NB;       // added by js
 extern int64_t EACH_EMPTY_BLOCK_ENTRY_NB;      // added by js
 
 extern int EMPTY_BLOCK_TABLE_NB;
-#endif
 
-#ifdef DA_MAP
 extern int64_t DA_PAGE_MAPPING_ENTRY_NB;
 extern int64_t DA_BLOCK_MAPPING_ENTRY_NB;
 extern int64_t EACH_EMPTY_TABLE_ENTRY_NB;
 extern int EMPTY_TABLE_ENTRY_NB;
 extern int VICTIM_TABLE_ENTRY_NB;
-#endif
 
 /* NAND Flash Delay */
 extern int REG_WRITE_DELAY;
@@ -139,4 +128,3 @@ int64_t CALC_DA_PM_ENTRY_NB(void);
 int64_t CALC_DA_BM_ENTRY_NB(void);
 #endif
 
-#endif

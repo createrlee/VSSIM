@@ -33,11 +33,11 @@ int DATA_BLOCK_NB;
 //int64_t PAGE_MAPPING_ENTRY_NB;
 #endif
 
-#if defined PAGE_MAP || defined BLOCK_MAP
+//#if defined PAGE_MAP || defined BLOCK_MAP
 //int64_t EACH_EMPTY_TABLE_ENTRY_NB;
 int EMPTY_TABLE_ENTRY_NB;
 int VICTIM_TABLE_ENTRY_NB;
-#endif
+//#endif
 
 #if defined FAST_FTL || defined LAST_FTL
 int LOG_RAND_BLOCK_NB;
@@ -91,11 +91,11 @@ uint32_t READ_BUFFER_FRAME_NB;
 int CACHE_IDX_SIZE;
 #endif
 
-#ifdef FTL_MAP_CACHE
+//#ifdef FTL_MAP_CACHE
 uint32_t MAP_ENTRY_SIZE;
 uint32_t MAP_ENTRIES_PER_PAGE;
 uint32_t MAP_ENTRY_NB;
-#endif
+//#endif
 
 /* HOST Event Queue */
 #ifdef HOST_QUEUE
