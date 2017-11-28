@@ -73,9 +73,9 @@
 #include "ftl_inverse_mapping_manager.h"
 
 /* HEADER - VSSIM BENCH */
-
+#ifndef VSSIM_BENCH
 	#include "ssd_util.h"
-
+#endif
 
 /* HEADER - SSD MODULE */
 #include "ssd_io_manager.h"
@@ -85,19 +85,21 @@
 #include "firm_buffer_manager.h"
 
 /* HEADER - FTL Dependency */
-
+#if defined PAGE_MAP || defined BLOCK_MAP
 	#include "ftl_cache.h"
 	#include "ftl_gc_manager.h"
 	#include "ftl_mapping_manager.h"
-
-	//#include "ftl_log_mapping_manager.h"
-	//#include "ftl_data_mapping_manager.h"
-
-	//#include "ftl_gc_manager.h"
-	//#include "ftl_pm_mapping_manager.h"
-	//#include "ftl_bm_mapping_manager.h"
-	//#include "ftl_block_manager.h"
-
+#endif
+#if defined FAST_FTL || defined LAST_FTL
+	#include "ftl_log_mapping_manager.h"
+	#include "ftl_data_mapping_manager.h"
+#endif
+#ifdef DA_MAP
+	#include "ftl_gc_manager.h"
+	#include "ftl_pm_mapping_manager.h"
+	#include "ftl_bm_mapping_manager.h"
+	#include "ftl_block_manager.h"
+#endif
 
 /*************************
   Define Global Variables 
@@ -223,3 +225,4 @@
 //#define GET_QUEUE_DEPTH
 
 #endif // end of 'ifndef _COMMON_H_'
+

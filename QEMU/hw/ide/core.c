@@ -37,8 +37,7 @@
 
 #include "hw/ide/internal.h"
 
-#include "ssd.h"  //Include SSD Features
-
+#include "hw/ide/ssd.h"  //Include SSD Features
 
 /* These values were based on a Seagate ST3500418AS but have been modified
    to make more sense in QEMU */
@@ -149,10 +148,10 @@ static void ide_identify(IDEState *s)
 //    }
     
     //modified by createmain for SSD Trim function
-#ifdef TARGET_I386
+
     if(SSD_IS_SUPPORT_TRIM() == 1)
     put_le16(p + 69, 0x04000); //trim function of the Data Set Management command supports determinate behavior.
-#endif
+
 
     if (s->ncq_queues) {
         put_le16(p + 75, s->ncq_queues - 1);
@@ -207,7 +206,7 @@ static void ide_identify(IDEState *s)
 //        put_le16(p + 169, 1); /* TRIM support */
 //    }
     
-#ifdef TARGET_I386
+
     if(SSD_IS_SUPPORT_TRIM() == 1)
     {
         //modified by createmain for SSD Trim function
@@ -215,7 +214,7 @@ static void ide_identify(IDEState *s)
         put_le16(p + 206, 0x1); //this device supports the Data Set Management Trim Command.
     }
     put_le16(p + 217, 0x01); //rotation speed is 1, it means SSD
-#endif
+
 
     ide_identify_size(s);
     s->identify_set = 1;
@@ -770,17 +769,18 @@ static void ide_sector_read(IDEState *s)
     printf("sector=%" PRId64 "\n", sector_num);
 #endif
     
-#ifdef TARGET_I386
 #ifdef F2FS_TEST
-    if(strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+
+    if(strcmp(filename, GET_FILE_NAME_HDB())==0)
 #else
-    if(strcmp(s->bs->filename, GET_FILE_NAME_HDA())==0 ||
-       strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+//GET_FILE_NAME_HDB()
+    if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
+       strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #endif
     {
         SSD_READ(n,sector_num); //SSD READ function call
     }
-#endif
+
 
     if (!ide_sect_range_ok(s, sector_num, n)) {
         ide_rw_error(s);
@@ -920,32 +920,32 @@ static void ide_dma_cb(void *opaque, int ret)
     offset = sector_num << BDRV_SECTOR_BITS;
     switch (s->dma_cmd) {
     case IDE_DMA_READ:
-#ifdef TARGET_I386
+
 #ifdef F2FS_TEST
-        if(strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+        if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #else
-        if(strcmp(s->bs->filename, GET_FILE_NAME_HDA())==0 ||
-           strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+        if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
+           strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #endif
         {
             SSD_READ(n, sector_num);
         }
-#endif
+
         s->bus->dma->aiocb = dma_blk_read(s->blk, &s->sg, offset,
                                           BDRV_SECTOR_SIZE, ide_dma_cb, s);
         break;
     case IDE_DMA_WRITE:
-#ifdef TARGET_I386
+
 #ifdef F2FS_TEST
-        if(strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+        if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #else
-        if(strcmp(s->bs->filename, GET_FILE_NAME_HDA())==0 ||
-           strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+        if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
+           strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #endif
         {
             SSD_WRITE(n, sector_num);
         }
-#endif
+
         s->bus->dma->aiocb = dma_blk_write(s->blk, &s->sg, offset,
                                            BDRV_SECTOR_SIZE, ide_dma_cb, s);
         break;
@@ -1080,17 +1080,17 @@ static void ide_sector_write(IDEState *s)
         return;
     }
     
-#ifdef TARGET_I386
+
 #ifdef F2FS_TEST
-    if(strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+    if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #else
-    if(strcmp(s->bs->filename, GET_FILE_NAME_HDA())==0 ||
-       strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+    if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
+       strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #endif
     {
         SSD_WRITE(n, sector_num);
     }
-#endif
+
 
     s->iov.iov_base = s->io_buffer;
     s->iov.iov_len  = n * BDRV_SECTOR_SIZE;
@@ -1416,11 +1416,11 @@ static bool cmd_data_set_management(IDEState *s, uint8_t cmd)
 {
     switch (s->feature) {
     case DSM_TRIM:
-#ifdef TARGET_I386
+
         if(SSD_IS_SUPPORT_TRIM() == 1)
         {
-            if(strcmp(s->bs->filename, GET_FILE_NAME_HDA())==0 ||
-               strcmp(s->bs->filename, GET_FILE_NAME_HDB())==0)
+            if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
+               strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
             {
                 ide_cmd_lba48_transform(s, lba48);
                 
@@ -1462,7 +1462,7 @@ static bool cmd_data_set_management(IDEState *s, uint8_t cmd)
                 SSD_DSM_TRIM(iov.iov[0].iov_len, iov.iov[0].iov_base);
             }
         }
-#endif
+
         if (s->blk) {
             ide_sector_start_dma(s, IDE_DMA_TRIM);
             return false;
@@ -2729,6 +2729,7 @@ void ide_init2(IDEBus *bus, qemu_irq irq)
     }
     bus->irq = irq;
     bus->dma = &ide_dma_nop;
+    
 
     SSD_INIT();
 

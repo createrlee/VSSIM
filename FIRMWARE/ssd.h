@@ -5,12 +5,13 @@
 // Hanyang University, Seoul, Korea
 // Embedded Software Systems Laboratory. All right reserved
 
-#ifndef _SSD_H_
-#define _SSD_H_
+//#ifndef _SSD_H_
+//#define _SSD_H_
 
 //#include "hw.h"
-typedef int int32_t;
+#include <pthread.h>
 
+typedef int int32_t;
 
 //FILE *fp;
 void SSD_INIT(void);
@@ -21,4 +22,5 @@ void SSD_READ(unsigned int length, int32_t sector_nb);
 void SSD_DSM_TRIM(unsigned int length, void* trim_data);
 int SSD_IS_SUPPORT_TRIM(void);
 
-#endif
+//#endif
+

@@ -87,7 +87,7 @@ void FTL_TERM(void)
 
 void FTL_READ(int32_t sector_nb, unsigned int length)
 {
-	int ret;
+	
 
 #ifdef GET_FTL_WORKLOAD
 	FILE* fp_workload = fopen("./data/workload_ftl.txt","a");
@@ -105,7 +105,8 @@ void FTL_READ(int32_t sector_nb, unsigned int length)
 	int64_t start_ftl_r, end_ftl_r;
 	start_ftl_r = get_usec();
 #endif
-	ret = _FTL_READ(sector_nb, length);
+	//int ret;
+	//ret = _FTL_READ(sector_nb, length);
 #ifdef FTL_IO_LATENCY
 	end_ftl_r = get_usec();
 	if(length >= 128)
@@ -115,7 +116,7 @@ void FTL_READ(int32_t sector_nb, unsigned int length)
 
 void FTL_WRITE(int32_t sector_nb, unsigned int length)
 {
-	int ret;
+	
 
 #ifdef GET_FTL_WORKLOAD
 	FILE* fp_workload = fopen("./data/workload_ftl.txt","a");
@@ -133,7 +134,8 @@ void FTL_WRITE(int32_t sector_nb, unsigned int length)
 	int64_t start_ftl_w, end_ftl_w;
 	start_ftl_w = get_usec();
 #endif
-	ret = _FTL_WRITE(sector_nb, length);
+	//int ret;
+	//ret = _FTL_WRITE(sector_nb, length);
 #ifdef FTL_IO_LATENCY
 	end_ftl_w = get_usec();
 	if(length >= 128)

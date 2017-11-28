@@ -11,7 +11,7 @@
 int SECTOR_SIZE;
 int PAGE_SIZE;
 
-//int64_t SECTOR_NB;
+int64_t SECTOR_NB;
 int PAGE_NB;
 int FLASH_NB;
 int BLOCK_NB;
@@ -20,21 +20,21 @@ int PLANES_PER_FLASH;
 
 int SECTORS_PER_PAGE;
 int PAGES_PER_FLASH;
-//int64_t PAGES_IN_SSD;
+int64_t PAGES_IN_SSD;
 
 int WAY_NB;
 int OVP;
 
 /* Mapping Table */
 int DATA_BLOCK_NB;
-//int64_t BLOCK_MAPPING_ENTRY_NB;		
+int64_t BLOCK_MAPPING_ENTRY_NB;		
 
 #ifdef PAGE_MAP
-//int64_t PAGE_MAPPING_ENTRY_NB;
+int64_t PAGE_MAPPING_ENTRY_NB;
 #endif
 
 //#if defined PAGE_MAP || defined BLOCK_MAP
-//int64_t EACH_EMPTY_TABLE_ENTRY_NB;
+int64_t EACH_EMPTY_TABLE_ENTRY_NB;
 int EMPTY_TABLE_ENTRY_NB;
 int VICTIM_TABLE_ENTRY_NB;
 //#endif
@@ -145,110 +145,112 @@ void INIT_SSD_CONFIG(void)
 		{
 			if(strcmp(szCommand, "FILE_NAME_HDA") == 0)
 			{
-				fscanf(pfData, "%s", FILE_NAME_HDA);
+				if(fscanf(pfData, "%s", FILE_NAME_HDA)) {
+				}
 			}
 			else if(strcmp(szCommand, "FILE_NAME_HDB") == 0)
 			{
-				fscanf(pfData, "%s", FILE_NAME_HDB);
+				if(fscanf(pfData, "%s", FILE_NAME_HDB)) {
+				}
 			}
 			else if(strcmp(szCommand, "PAGE_SIZE") == 0)
 			{
-				fscanf(pfData, "%d", &PAGE_SIZE);
+				if(fscanf(pfData, "%d", &PAGE_SIZE)){}
 			}
 			else if(strcmp(szCommand, "PAGE_NB") == 0)
 			{
-				fscanf(pfData, "%d", &PAGE_NB);
+				if(fscanf(pfData, "%d", &PAGE_NB)){}
 			}
 			else if(strcmp(szCommand, "SECTOR_SIZE") == 0)
 			{
-				fscanf(pfData, "%d", &SECTOR_SIZE);
+				if(fscanf(pfData, "%d", &SECTOR_SIZE)){}
 			}	
 			else if(strcmp(szCommand, "FLASH_NB") == 0)
 			{
-				fscanf(pfData, "%d", &FLASH_NB);
+				if(fscanf(pfData, "%d", &FLASH_NB)){}
 			}	
 			else if(strcmp(szCommand, "BLOCK_NB") == 0)
 			{
-				fscanf(pfData, "%d", &BLOCK_NB);
+				if(fscanf(pfData, "%d", &BLOCK_NB)){}
 			}					
 			else if(strcmp(szCommand, "PLANES_PER_FLASH") == 0)
 			{
-				fscanf(pfData, "%d", &PLANES_PER_FLASH);
+				if(fscanf(pfData, "%d", &PLANES_PER_FLASH)){}
 			}
 			else if(strcmp(szCommand, "REG_WRITE_DELAY") == 0)
 			{
-				fscanf(pfData, "%d", &REG_WRITE_DELAY);
+				if(fscanf(pfData, "%d", &REG_WRITE_DELAY)){}
 			}	
 			else if(strcmp(szCommand, "CELL_PROGRAM_DELAY") == 0)
 			{
-				fscanf(pfData, "%d", &CELL_PROGRAM_DELAY);
+				if(fscanf(pfData, "%d", &CELL_PROGRAM_DELAY)){}
 			}
 			else if(strcmp(szCommand, "REG_READ_DELAY") == 0)
 			{
-				fscanf(pfData, "%d", &REG_READ_DELAY);
+				if(fscanf(pfData, "%d", &REG_READ_DELAY)){}
 			}
 			else if(strcmp(szCommand, "CELL_READ_DELAY") == 0)
 			{
-				fscanf(pfData, "%d", &CELL_READ_DELAY);
+				if(fscanf(pfData, "%d", &CELL_READ_DELAY)){}
 			}
 			else if(strcmp(szCommand, "BLOCK_ERASE_DELAY") == 0)
 			{
-				fscanf(pfData, "%d", &BLOCK_ERASE_DELAY);
+				if(fscanf(pfData, "%d", &BLOCK_ERASE_DELAY)){}
 			}
 			else if(strcmp(szCommand, "CHANNEL_SWITCH_DELAY_R") == 0)
 			{
-				fscanf(pfData, "%d", &CHANNEL_SWITCH_DELAY_R);
+				if(fscanf(pfData, "%d", &CHANNEL_SWITCH_DELAY_R)){}
 			}
 			else if(strcmp(szCommand, "CHANNEL_SWITCH_DELAY_W") == 0)
 			{
-				fscanf(pfData, "%d", &CHANNEL_SWITCH_DELAY_W);
+				if(fscanf(pfData, "%d", &CHANNEL_SWITCH_DELAY_W)){}
 			}
 			else if(strcmp(szCommand, "DSM_TRIM_ENABLE") == 0)
 			{
-				fscanf(pfData, "%d", &DSM_TRIM_ENABLE);
+				if(fscanf(pfData, "%d", &DSM_TRIM_ENABLE)){}
 			}
 			else if(strcmp(szCommand, "IO_PARALLELISM") == 0)
 			{
-				fscanf(pfData, "%d", &IO_PARALLELISM);
+				if(fscanf(pfData, "%d", &IO_PARALLELISM)){}
 			}
 			else if(strcmp(szCommand, "CHANNEL_NB") == 0)
 			{
-				fscanf(pfData, "%d", &CHANNEL_NB);
+				if(fscanf(pfData, "%d", &CHANNEL_NB)){}
 			}
 			else if(strcmp(szCommand, "OVP") == 0)
 			{
-				fscanf(pfData, "%d", &OVP);
+				if(fscanf(pfData, "%d", &OVP)){}
 			}
 #if defined FTL_MAP_CACHE || defined Polymorphic_FTL
 			else if(strcmp(szCommand, "CACHE_IDX_SIZE") == 0)
 			{
-				fscanf(pfData, "%d", &CACHE_IDX_SIZE);
+				if(fscanf(pfData, "%d", &CACHE_IDX_SIZE)){}
 			}
 #endif
 #ifdef FIRM_IO_BUFFER
 			else if(strcmp(szCommand, "WRITE_BUFFER_FRAME_NB") == 0)
 			{
-				fscanf(pfData, "%u", &WRITE_BUFFER_FRAME_NB);
+				if(fscanf(pfData, "%u", &WRITE_BUFFER_FRAME_NB)){}
 			}
 			else if(strcmp(szCommand, "READ_BUFFER_FRAME_NB") == 0)
 			{
-				fscanf(pfData, "%u", &READ_BUFFER_FRAME_NB);
+				if(fscanf(pfData, "%u", &READ_BUFFER_FRAME_NB)){}
 			}
 #endif
 #ifdef HOST_QUEUE
 			else if(strcmp(szCommand, "HOST_QUEUE_ENTRY_NB") == 0)
 			{
-				fscanf(pfData, "%u", &HOST_QUEUE_ENTRY_NB);
+				if(fscanf(pfData, "%u", &HOST_QUEUE_ENTRY_NB)){}
 			}
 #endif
 #if defined FAST_FTL || defined LAST_FTL
 			else if(strcmp(szCommand, "LOG_RAND_BLOCK_NB") == 0)
 			{
-				fscanf(pfData, "%d", &LOG_RAND_BLOCK_NB);
+				if(fscanf(pfData, "%d", &LOG_RAND_BLOCK_NB)){}
 			}	
 			else if(strcmp(szCommand, "LOG_SEQ_BLOCK_NB") == 0)
 			{
-				fscanf(pfData, "%d", &LOG_SEQ_BLOCK_NB);
+				if(fscanf(pfData, "%d", &LOG_SEQ_BLOCK_NB)){}
 			}	
 #endif
 			memset(szCommand, 0x00, 1024);

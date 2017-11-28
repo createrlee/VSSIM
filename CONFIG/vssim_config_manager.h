@@ -8,6 +8,7 @@
 #include "common.h"
 
 
+
 /* SSD Configuration */
 extern int SECTOR_SIZE;
 extern int PAGE_SIZE;
@@ -31,10 +32,6 @@ extern int DATA_BLOCK_NB;
 extern int64_t BLOCK_MAPPING_ENTRY_NB;
 
 extern int64_t PAGE_MAPPING_ENTRY_NB;
-
-extern int64_t EACH_EMPTY_TABLE_ENTRY_NB;
-extern int EMPTY_TABLE_ENTRY_NB;
-extern int VICTIM_TABLE_ENTRY_NB;
 
 extern int LOG_RAND_BLOCK_NB;
 extern int LOG_SEQ_BLOCK_NB;
