@@ -10,6 +10,7 @@
 
 //#include "hw.h"
 #include <pthread.h>
+#include "common.h"
 
 typedef int int32_t;
 

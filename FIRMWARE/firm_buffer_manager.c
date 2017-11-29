@@ -567,6 +567,7 @@ void READ_DATA_FROM_BUFFER_TO_HOST(event_queue_entry* c_e_q_entry)
 #ifdef FIRM_IO_BUF_DEBUG
 	printf("[%s] Start.\n",__FUNCTION__);
 #endif
+        printf("%p %p\n", sata_read_ptr, c_e_q_entry->buf);
 	if(sata_read_ptr != c_e_q_entry->buf){
 		printf("ERROR [%s] sata pointer is different from entry pointer.\n",__FUNCTION__);
 	}

@@ -127,8 +127,8 @@ int NR_RESERVED_PHY_BLOCKS;
 int NR_RESERVED_PHY_PAGES;
 #endif
 
-char FILE_NAME_HDA[1024] = {0,};
-char FILE_NAME_HDB[1024] = {0,};
+char FILE_NAME_HDA[1024] = {'0',};
+char FILE_NAME_HDB[1024] = {'0',};
 
 void INIT_SSD_CONFIG(void)
 {

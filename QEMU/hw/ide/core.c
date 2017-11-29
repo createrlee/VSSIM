@@ -109,7 +109,7 @@ static void ide_identify(IDEState *s)
     put_le16(p + 6, s->sectors);
     padstr((char *)(p + 10), s->drive_serial_str, 20); /* serial number */
     put_le16(p + 20, 3); /* XXX: retired, remove ? */
-    put_le16(p + 21, 512); /* cache size in sectors */
+    //put_le16(p + 21, 512); /* cache size in sectors */
     
     //modified by createmain for SSD Trim function
     put_le16(p + 21, 0x0400); //support for the DSM is changeable.
@@ -143,14 +143,15 @@ static void ide_identify(IDEState *s)
     put_le16(p + 67, 120);
     put_le16(p + 68, 120);
     
-//    if (dev && dev->conf.discard_granularity) {
-//        put_le16(p + 69, (1 << 14)); /* determinate TRIM behavior */
-//    }
+    //if (dev && dev->conf.discard_granularity) {
+      //  put_le16(p + 69, (1 << 14)); /* determinate TRIM behavior */
+    //}
     
     //modified by createmain for SSD Trim function
 
-    if(SSD_IS_SUPPORT_TRIM() == 1)
-    put_le16(p + 69, 0x04000); //trim function of the Data Set Management command supports determinate behavior.
+    if(SSD_IS_SUPPORT_TRIM() == 1) {
+        put_le16(p + 69, 0x04000); //trim function of the Data Set Management command supports determinate behavior.
+    }
 
 
     if (s->ncq_queues) {
@@ -202,9 +203,10 @@ static void ide_identify(IDEState *s)
         put_le16(p + 111, s->wwn);
     }
     
-//    if (dev && dev->conf.discard_granularity) {
-//        put_le16(p + 169, 1); /* TRIM support */
-//    }
+    //if (dev && dev->conf.discard_granularity) {
+      //  put_le16(p + 169, 1); /* TRIM support */
+	//put_le16(p + 206, 0x1);
+    //}
     
 
     if(SSD_IS_SUPPORT_TRIM() == 1)
@@ -774,6 +776,7 @@ static void ide_sector_read(IDEState *s)
     if(strcmp(filename, GET_FILE_NAME_HDB())==0)
 #else
 //GET_FILE_NAME_HDB()
+	
     if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
        strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
 #endif
@@ -1416,13 +1419,16 @@ static bool cmd_data_set_management(IDEState *s, uint8_t cmd)
 {
     switch (s->feature) {
     case DSM_TRIM:
-
+/*
         if(SSD_IS_SUPPORT_TRIM() == 1)
         {
             if(strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDA())==0 ||
                strcmp(blk_bs(s->blk)->filename, GET_FILE_NAME_HDB())==0)
             {
                 ide_cmd_lba48_transform(s, lba48);
+
+		//IDEDMA *dma = s->bus->dma
+		//BMDMAState *bm = DO_UPCAST(BMDMAState, dma, dma);
                 
                 s->io_buffer_size = s->nsector * 512;
                 s->bmdma->ide_if  = s;
@@ -1461,7 +1467,7 @@ static bool cmd_data_set_management(IDEState *s, uint8_t cmd)
                 }
                 SSD_DSM_TRIM(iov.iov[0].iov_len, iov.iov[0].iov_base);
             }
-        }
+        }*/
 
         if (s->blk) {
             ide_sector_start_dma(s, IDE_DMA_TRIM);

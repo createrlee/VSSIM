@@ -6,7 +6,7 @@
 // Embedded Software Systems Laboratory. All right reserved
 
 #include "ssd.h"
-#include "common.h"
+
 
 #ifdef GET_WORKLOAD
 #include <time.h>
